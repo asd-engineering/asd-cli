@@ -1,6 +1,6 @@
 # ASD CLI User Manual
 
-**Version:** 2.0.2 | **Last Updated:** 2026-02-02
+**Version:** 2.1.0 | **Last Updated:** 2026-02-07
 
 Share local services over HTTPS with anyone, anywhere. No port forwarding, no firewall rules, no certificates to manage.
 
@@ -21,6 +21,7 @@ Share local services over HTTPS with anyone, anywhere. No port forwarding, no fi
 11. [Tunnel Protocols](#11-tunnel-protocols)
 12. [Plugins & Extensibility](#12-plugins--extensibility)
 13. [Resources & Community](#13-resources--community)
+14. [Vault — Secret Management](#14-vault--secret-management)
 
 ---
 
@@ -94,7 +95,10 @@ Get a public URL in seconds.
 | Platform | Command |
 |----------|---------|
 | Linux/macOS | `curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh \| bash` |
-| Windows (Admin PowerShell) | `irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 \| iex` |
+| Windows | `powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 \| iex"` |
+
+**Windows Note:** The install command bypasses script execution policy for just this installer.
+After install, `asd` will be at `%LOCALAPPDATA%\asd\bin\asd.exe`. Add to PATH if prompted.
 
 **Windows Terminal Recommendation:**
 
@@ -103,14 +107,22 @@ For the best experience on Windows, we recommend:
 | Terminal | Status | Notes |
 |----------|--------|-------|
 | **Git Bash** | Recommended | Full Unix compatibility, best support |
-| Windows Terminal + PowerShell | Tested | Works well, some path edge cases |
-| CMD.exe | Not recommended | Limited functionality |
+| Windows Terminal + PowerShell | Tested | Works well |
+| CMD.exe | Tested | Works with `asd.exe` |
 
 Git Bash comes with [Git for Windows](https://git-scm.com/download/win) and provides
 a Unix-like environment that matches our documentation examples.
 
-> **Note:** PowerShell support is actively being improved. If you encounter issues,
-> please report them at our GitHub repository.
+**Windows Install Location:**
+
+The installer places `asd.exe` at `%LOCALAPPDATA%\asd\bin\asd.exe` and prompts to add this to your PATH.
+If you skip the PATH prompt, you can run it directly:
+
+```cmd
+%LOCALAPPDATA%\asd\bin\asd --version
+```
+
+Or add to PATH manually in System Settings > Environment Variables.
 
 ### Step 2: Start Your Local Server
 
@@ -503,6 +515,26 @@ code-server runs VS Code in a browser. Get the full VS Code experience from any 
 - Edit code on a tablet or Chromebook
 - Use your powerful desktop from a laptop
 - Share a development environment with teammates
+
+### Platform Availability
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| **Linux** | ✅ Supported | Primary platform, recommended |
+| **macOS** | ✅ Supported | Works natively |
+| **Windows (WSL)** | ✅ Supported | Use WSL2 with Ubuntu/Debian |
+| **Windows (native)** | ❌ Not available | No native Windows builds |
+
+**Windows Users:** code-server does not provide native Windows builds. To use code-server on Windows:
+
+1. **Recommended:** Install [WSL2](https://docs.microsoft.com/en-us/windows/wsl/install) with Ubuntu
+2. Run ASD CLI inside WSL: `asd code start`
+3. Access from your Windows browser at the provided URL
+
+We are actively exploring alternatives for native Windows support. Options under consideration include:
+- VS Code tunnels (official Microsoft remote development)
+- OpenVSCode Server
+- Other browser-based IDE solutions
 
 ### Quick Start
 
@@ -1052,6 +1084,26 @@ echo $PATH
 </details>
 
 <details>
+<summary><strong>Windows: asd not found after install</strong></summary>
+
+The install directory may not be in PATH. Either:
+
+**Option 1:** Run with full path:
+```cmd
+%LOCALAPPDATA%\asd\bin\asd --version
+```
+
+**Option 2:** Add to PATH (run in Admin PowerShell):
+```powershell
+$installDir = "$env:LOCALAPPDATA\asd\bin"
+$path = [Environment]::GetEnvironmentVariable("PATH", "User")
+[Environment]::SetEnvironmentVariable("PATH", "$path;$installDir", "User")
+```
+
+Restart your terminal after adding to PATH.
+</details>
+
+<details>
 <summary><strong>Port already in use</strong></summary>
 
 Another process is using the port.
@@ -1172,6 +1224,7 @@ Quick reference of most-used commands:
 | Command | Description |
 |---------|-------------|
 | `asd init` | Initialize project workspace |
+| `asd run <task>` | Run automation task from asd.yaml |
 | `asd expose <port>` | Expose a port instantly |
 | `asd login` | Login for tunnels (coming soon) |
 | `asd net` | Open network TUI |
@@ -1530,6 +1583,11 @@ ASD is built on open source principles. Key components:
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
+**Start development:**
+```bash
+asd run dev               # Run 'dev' task from asd.yaml
+```
+
 **Expose a port:**
 ```bash
 asd expose 3000
@@ -1547,10 +1605,114 @@ asd code start
 
 **Stop everything:**
 ```bash
+asd down                  # Stop workspace services
 asd terminal stop
 asd code stop
 asd expose stop 3000
 ```
+
+---
+
+## 14. Vault — Secret Management
+
+ASD Vault provides encrypted secret management backed by Supabase Vault (pgsodium). Secrets are encrypted at rest and never stored in plaintext on disk.
+
+### Quick Start
+
+```bash
+# Requires authentication
+asd tunnel auth login
+
+# Store a secret
+asd vault set DATABASE_URL "postgres://user:pass@host:5432/db"
+
+# Retrieve a secret
+asd vault get DATABASE_URL
+
+# List all secrets (metadata only, no values)
+asd vault list
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `asd vault list` | List secrets (name, category, scope — no values) |
+| `asd vault get <name>` | Print decrypted value to stdout |
+| `asd vault set <name> [value]` | Create or update a secret |
+| `asd vault delete <name>` | Soft-delete a secret |
+| `asd vault import <directory>` | Bulk import secrets from a directory |
+| `asd vault export <directory>` | Export all secrets to files |
+| `asd vault inject <template>` | Substitute `asd://` references in a template |
+| `asd vault run --env-file <tpl> -- <cmd>` | Run command with secrets injected as env vars |
+
+### Storing Secrets
+
+```bash
+# From argument
+asd vault set API_KEY "sk-abc123"
+
+# From stdin (for multiline or piped values)
+cat ~/.kube/config | asd vault set kubeconfig --stdin
+
+# From file
+asd vault set tls/cert --file ./cert.pem
+
+# With category and description
+asd vault set db/PASSWORD "s3cret" --category database --description "Production DB password"
+
+# Organisation-scoped (shared with team)
+asd vault set SHARED_TOKEN "xyz" --scope org
+```
+
+### Injecting Secrets into Processes
+
+```bash
+# Run a command with secrets as environment variables
+asd vault run --env-file .env.tpl -- node server.js
+
+# Template file (.env.tpl) uses asd:// references:
+# DATABASE_URL=asd://db/PASSWORD
+# API_KEY=asd://API_KEY
+
+# Substitute references in a config file
+asd vault inject config.tpl config.json
+```
+
+### Import & Export
+
+```bash
+# Import all files from a directory (file names become secret names)
+asd vault import ./secrets/
+
+# Export all secrets back to files (round-trip faithful)
+asd vault export ./backup/
+```
+
+### Scopes
+
+- **Personal** (`--scope user`, default): Only you can access
+- **Organisation** (`--scope org`): Shared with org admins
+
+### Plan Limits
+
+| Plan | Secrets Included |
+|------|-----------------|
+| Free | Not available |
+| Developer | 10 |
+| Pro | 50 |
+| Scale | 200 |
+| Enterprise | Unlimited |
+
+Need more? Purchase the **Vault addon** (€5/month per unit, +50 secrets) from the billing page.
+
+### Web Dashboard
+
+Manage secrets at `/workspace/vault/` in the admin dashboard. The web UI shows secret metadata (name, category, scope) but never displays decrypted values — use `asd vault get` from the CLI for that.
+
+### Security
+
+Secrets are encrypted at rest using pgsodium AEAD (XChaCha20-Poly1305). The encryption root key is managed by Supabase KMS and never stored in the database. Access is enforced via Row Level Security per user/organisation.
 
 ---
 

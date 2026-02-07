@@ -119,6 +119,50 @@ features:
   disable_authentication: false   # Disable basic auth globally
 ```
 
+### Automation Tasks
+
+Define reusable tasks that can be run with `asd run <task>`:
+
+```yaml
+automation:
+  dev:
+    - run: "pnpm dev"
+      background: true
+    - waitFor: "http://localhost:3000"
+
+  prod:
+    - run: "pnpm build && pnpm preview"
+      background: true
+
+  start:
+    - run: "docker compose up -d"
+    - waitFor: "http://localhost:8080"
+```
+
+**Run tasks with:**
+```bash
+asd run dev               # Simple, recommended way
+asd run prod
+asd up --task=dev         # Alternative with more options
+```
+
+**Task Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `run` | `string` | Command to execute (alias for `command`) |
+| `background` | `boolean` | Run in background (daemon mode) |
+| `waitFor` | `string` | Wait for URL to become available |
+| `timeout` | `number` | Timeout in milliseconds |
+| `environment` | `object` | Environment variables |
+
+**Convention-based defaults:**
+
+When running `asd up` without `--task`, it tries these names in order:
+1. `up`
+2. `dev`
+3. `start`
+
 ### Caddy/TLS Settings
 
 ```yaml

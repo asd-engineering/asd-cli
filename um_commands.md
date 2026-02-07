@@ -11,6 +11,7 @@ Complete reference for all ASD CLI commands.
 | Command | Description |
 |---------|-------------|
 | `asd init` | Initialize project workspace |
+| `asd run <task>` | Run automation task from asd.yaml |
 | `asd expose <port>` | Expose a port with tunnel |
 | `asd login` | Login for tunnels (coming soon) |
 | `asd net` | Open network TUI |
@@ -48,6 +49,39 @@ asd env-init              # Merge with existing .env
 asd env-init --override   # Replace entire .env
 asd env-init --yes        # Non-interactive mode
 ```
+
+### `asd run <task>`
+
+Run an automation task defined in `asd.yaml`. This is the simplest way to start your development environment.
+
+```bash
+asd run dev               # Run the 'dev' task
+asd run prod              # Run the 'prod' task
+asd run start             # Run the 'start' task
+asd run                   # Show available tasks
+```
+
+**What it does:**
+1. Reads `automation:` section from `asd.yaml`
+2. Starts the specified task in the background
+3. Shows rich output with service status and tunnel URLs
+
+**Example asd.yaml:**
+```yaml
+automation:
+  dev:
+    - run: "pnpm dev"
+      background: true
+  prod:
+    - run: "pnpm build && pnpm preview"
+      background: true
+```
+
+**Options:**
+- `--follow` or `-f`: Follow logs after starting
+- `--json`: Output JSON format
+
+**See also:** `asd up` for more advanced options like `--env` flag.
 
 ### `asd login`
 
@@ -496,6 +530,7 @@ Key environment variables for ASD:
 | Command | Status |
 |---------|--------|
 | `asd init` | ✅ |
+| `asd run` | 🟢 |
 | `asd net` | ✅ |
 | `asd net apply` | ✅ |
 | `asd expose` | 🟢 |
