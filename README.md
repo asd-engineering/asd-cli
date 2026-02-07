@@ -1615,6 +1615,8 @@ asd expose stop 3000
 
 ## 14. Vault — Secret Management
 
+> **🟠 Alpha Feature** — Ready for testing. API may change between releases. Report issues via GitHub.
+
 ASD Vault provides encrypted secret management backed by Supabase Vault (pgsodium). Secrets are encrypted at rest and never stored in plaintext on disk.
 
 ### Quick Start

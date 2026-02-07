@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.1.0 | **Last Updated:** 2026-01-31 | **Status:** ACTIVE
+**Version:** 1.2.0 | **Last Updated:** 2026-02-07 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 
@@ -75,6 +75,23 @@ This document tracks the maturity level of ASD CLI features, helping users under
 
 ---
 
+## Vault — Secret Management
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `asd vault set/get/delete` | 🟠 | Core CRUD operations, encrypted at rest (pgsodium) |
+| `asd vault list` | 🟠 | Metadata listing (name, category, scope) |
+| `asd vault import/export` | 🟠 | Bulk directory-based import/export |
+| `asd vault inject` | 🟠 | Template substitution with `asd://` references |
+| `asd vault run` | 🟠 | Process execution with secrets as env vars |
+| Personal/org scopes | 🟠 | Per-user and shared organisation secrets |
+| Web dashboard | 🟠 | View metadata at `/workspace/vault/` |
+| Plan-based quotas | 🟠 | Free: 0, Developer: 10, Pro: 50, Scale: 200 |
+
+> **Alpha:** Ready for testing. Requires `asd tunnel auth login` for authentication. API and CLI flags may change between releases.
+
+---
+
 ## GitHub Integration
 
 | Feature | Status | Notes |
@@ -126,6 +143,11 @@ Features progress through maturity levels as they gain:
 ---
 
 ## Changelog
+
+### v1.2.0 (2026-02-07)
+
+- Added Vault secret management section (Alpha status)
+- All vault features marked 🟠 Alpha — ready for testing
 
 ### v1.1.0 (2026-01-31)
 
