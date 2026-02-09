@@ -1,0 +1,70 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [feat/windows-av-installer]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ── Job 1: AV Pattern Scanner ────────────────────────────────────
+  # Scans codebase for patterns that trigger Windows AV heuristics.
+  # Must pass before any other job runs.
+  av-scan:
+    name: AV Pattern Scanner
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run AV pattern scanner
+        run: bun test tests/av-pattern-scanner.test.mjs
+
+  # ── Job 2: Unit Tests ────────────────────────────────────────────
+  # Fast unit tests for pure functions (no network, no disk I/O).
+  unit-tests:
+    name: Unit Tests
+    runs-on: windows-latest
+    needs: av-scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run unit tests
+        run: |
+          bun test tests/binary-installer.test.mjs
+          bun test tests/shell-helpers.test.mjs
+
+  # ── Job 3: Integration Tests ─────────────────────────────────────
+  # Real binary downloads, extraction, and process management.
+  # These hit the network so they run after unit tests pass.
+  integration-tests:
+    name: Integration Tests
+    runs-on: windows-latest
+    needs: unit-tests
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run integration tests
+        run: bun test tests/windows-integration.test.mjs --timeout 120000
