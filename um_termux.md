@@ -23,17 +23,9 @@ pkg update && pkg upgrade -y
 
 ### 3. Install ASD
 
-**Option A: Via npm**
 ```bash
-pkg install nodejs
-npm install -g @asd-engineering/cli
-```
-
-**Option B: Via Bun**
-```bash
-pkg install bun git
-# Clone your project with ASD submodule
-git clone --recursive https://github.com/your/project.git
+pkg install curl
+curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
 ### 4. Initialize
@@ -113,4 +105,4 @@ termux-wake-lock
 
 ---
 
-[Back to User Manual](./USER_MANUAL.md)
+[Back to User Manual](./README.md)

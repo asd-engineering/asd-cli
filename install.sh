@@ -70,7 +70,7 @@ get_latest_version() {
   fi
 
   for repo in "${repos[@]}"; do
-    local api_url="https://api.github.com/repos/${repo}/releases/latest"
+    local api_url="https://api.github.com/repos/${repo}/releases?per_page=1"
     local response
 
     if [[ -n "$auth_header" ]]; then
@@ -133,16 +133,32 @@ install_asd() {
   elif [[ -n "${GH_TOKEN:-}" ]]; then
     curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/octet-stream" "$download_url" -o "$tmp_dir/$archive_name" || error "Download failed"
   else
-    curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" || error "Download failed. For private repos, set GITHUB_TOKEN."
+    if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" 2>/dev/null; then
+      if [[ "$repo_for_download" == "$REPO" ]]; then
+        error "Download failed. Binary may not be available for '${platform}'.
+Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64.
+See https://github.com/asd-engineering/asd-cli/releases"
+      else
+        error "Download failed. For private repos, set GITHUB_TOKEN."
+      fi
+    fi
   fi
 
   info "Extracting to $INSTALL_DIR..."
   if [[ "$archive_name" == *.zip ]]; then
     unzip -q -o "$tmp_dir/$archive_name" -d "$tmp_dir/extracted"
-    cp -f "$tmp_dir/extracted/bin/"* "$INSTALL_DIR/"
+    # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
+    local bin_dir
+    bin_dir=$(find "$tmp_dir/extracted" -type d -name "bin" | head -1)
+    [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
+    cp -f "$bin_dir/"* "$INSTALL_DIR/"
   else
     tar -xzf "$tmp_dir/$archive_name" -C "$tmp_dir"
-    cp -f "$tmp_dir/bin/"* "$INSTALL_DIR/"
+    # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
+    local bin_dir
+    bin_dir=$(find "$tmp_dir" -type d -name "bin" ! -path "$INSTALL_DIR/*" | head -1)
+    [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
+    cp -f "$bin_dir/"* "$INSTALL_DIR/"
   fi
 
   # Make executable
