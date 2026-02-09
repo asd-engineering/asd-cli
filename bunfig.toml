@@ -1,0 +1,34 @@
+[test]
+# Test timeout in milliseconds
+timeout = 30000
+
+# Exclude directories from test discovery
+# asd-dashboard uses Playwright which is incompatible with bun test
+# workspace contains installed binaries (code-server, etc) with their own tests
+ignore = [
+  "**/asd-dashboard/**",
+  "**/node_modules/**",
+  "**/archive/**",
+  "**/local/**",
+  "**/workspace/**",
+  "workspace/**",
+  "./workspace/**",
+  "**/code-server/**",
+  "**/*.bak",
+  "**/*.spec.ts",
+  "**/*.spec.js",
+  "**/@xterm/**",
+  "**/node-pty/**",
+  "**/vscode/**"
+]
+
+# Exclude temp sandbox directories from coverage reports
+coveragePathIgnorePatterns = [
+  "**/tmp/**",
+  "**/asd-test-*/**",
+  "**/test-sandbox/**",
+  "**/node_modules/**"
+]
+
+# Don't include test files in coverage
+coverageSkipTestFiles = true
