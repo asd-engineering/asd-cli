@@ -148,6 +148,7 @@ function collectFiles(dir, acc = []) {
     ".next",
     "build",
     "vendor",
+    "bin",       // compiled output (asd.js) — bundled deps trigger false positives
   ])
   // Skip the scanner itself (contains pattern description strings that would match)
   const SKIP_FILES = new Set(["av-pattern-scanner.test.mjs"])
