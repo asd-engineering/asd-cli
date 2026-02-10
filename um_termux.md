@@ -23,9 +23,19 @@ pkg update && pkg upgrade -y
 
 ### 3. Install ASD
 
+**Option A: Via install script** (recommended)
 ```bash
 pkg install curl
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
+```
+
+**Option B: Via Bun** (for development)
+```bash
+pkg install bun git
+# Clone your project with ASD submodule
+git clone --recursive https://github.com/your/project.git
+cd your-project
+bun install
 ```
 
 ### 4. Initialize
@@ -105,4 +115,4 @@ termux-wake-lock
 
 ---
 
-[Back to User Manual](./README.md)
+[Back to User Manual](./USER_MANUAL.md)

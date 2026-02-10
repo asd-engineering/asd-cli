@@ -76,6 +76,10 @@ network:
 | `subdomain` | `string` | Subdomain prefix for tunnel URL |
 | `priority` | `number` | Route ordering (higher = first) |
 | `description` | `string` | Human-readable description |
+| `securityHeaders` | `object` | Security header configuration (see below) |
+| `iframeOrigin` | `string\|null` | Origin for iframe embedding (`null` to disable) |
+| `deleteResponseHeaders` | `string[]` | Response headers to strip from upstream |
+| `ingressTag` | `string\|null` | Per-service ingress tag (overrides `ASD_INGRESS_TAG` env) |
 
 > **Note:** `tunnelPreferred` and `tunnelPrefix` are deprecated aliases for `public` and `subdomain`. They still work for backward compatibility.
 
@@ -213,6 +217,64 @@ ASD_BASIC_AUTH_USERNAME=admin
 ASD_BASIC_AUTH_PASSWORD=your-secure-password
 ```
 
+### Route Options (Caddy)
+
+Fine-tune how Caddy handles requests for individual services using route options. These are passed directly to the Caddy route builder.
+
+#### Security Headers
+
+Add security-related response headers to a service:
+
+```yaml
+network:
+  services:
+    admin-panel:
+      dial: "127.0.0.1:3000"
+      securityHeaders:
+        enableHsts: true              # Strict-Transport-Security header
+        hstsMaxAge: 31536000          # Max-age in seconds (default: 1 year)
+        frameOptions: "DENY"          # X-Frame-Options: DENY or SAMEORIGIN
+        enableCompression: true       # Enable response compression
+```
+
+**`securityHeaders` properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `enableHsts` | `boolean` | Add `Strict-Transport-Security` header |
+| `hstsMaxAge` | `number` | HSTS max-age in seconds |
+| `frameOptions` | `"DENY"\|"SAMEORIGIN"` | `X-Frame-Options` header value |
+| `enableCompression` | `boolean` | Enable gzip/zstd response compression |
+
+#### Iframe Embedding
+
+Allow a service to be embedded in an iframe from a specific origin. Useful for dashboard integrations:
+
+```yaml
+network:
+  services:
+    supabase:studio:
+      iframeOrigin: "https://dashboard.asd.engineer"
+      deleteResponseHeaders: ["Content-Security-Policy"]
+```
+
+- **`iframeOrigin`** — Sets the `X-Frame-Options: ALLOW-FROM <origin>` header. Set to `null` to explicitly disable.
+- **`deleteResponseHeaders`** — Strips listed headers from upstream responses. Often needed to remove `Content-Security-Policy` or `X-Frame-Options` headers that the upstream service sets, so Caddy's headers take effect instead.
+
+#### Ingress Tagging
+
+Tag routes with an identifier for monitoring or routing purposes:
+
+```yaml
+network:
+  services:
+    api:
+      dial: "127.0.0.1:8080"
+      ingressTag: "production-api"    # Overrides ASD_INGRESS_TAG env var
+```
+
+The ingress tag is added as a response header. By default, all services use the value from the `ASD_INGRESS_TAG` environment variable (or `"local-caddy"`). Set `ingressTag` per-service to override, or set to `null` to disable.
+
 ---
 
 ## Plugins Configuration
@@ -299,6 +361,49 @@ Use these IDs in commands:
 asd net open supabase:studio    # Open in browser
 asd net tunnel start supabase:kong  # Start tunnel
 ```
+
+### Template Macros in Manifests
+
+Plugin manifests and `asd.yaml` support `${{ }}` template expressions. These are expanded during service discovery before routes are applied.
+
+**Environment Variables:**
+
+```yaml
+hosts: ["localhost", "${{ env.MY_CUSTOM_HOST }}"]
+```
+
+Reads `MY_CUSTOM_HOST` from `.env` or `process.env`.
+
+**Tunnel Credential Macros:**
+
+These macros resolve tunnel credentials directly from the credential registry — correct for all authentication types (SSH keys, tokens, ephemeral tokens) and server ownership types (shared, dedicated, self-hosted):
+
+| Macro | Returns | Example |
+|-------|---------|---------|
+| `${{ macro.tunnelHost("app") }}` | Full tunnel hostname | `app-fkmc.cicd.eu1.asd.engineer` |
+| `${{ macro.tunnelClientId() }}` | Client ID | `fkmc` |
+| `${{ macro.tunnelEndpoint() }}` | Server FQDN | `cicd.eu1.asd.engineer` |
+
+**Example usage in a manifest:**
+
+```yaml
+caddy:
+  routes:
+    - path: "/api/*"
+      hosts: ["localhost", "${{ macro.tunnelHost('app') }}"]
+      dial: "127.0.0.1:8080"
+```
+
+When tunnel credentials are available, this creates routes for both `localhost` and the tunnel hostname. When no credentials exist (e.g., fresh install), the tunnel host resolves to an empty string and is automatically filtered out — routes only match `localhost`.
+
+**Other macros:**
+
+| Macro | Description |
+|-------|-------------|
+| `${{ macro.getRandomPort() }}` | Allocate a random available port |
+| `${{ macro.getRandomString(length=32) }}` | Generate a random string |
+| `${{ macro.bcrypt(password="...", cost=12) }}` | Generate bcrypt hash |
+| `${{ core.isDockerAvailable() }}` | Check if Docker is running |
 
 ---
 
