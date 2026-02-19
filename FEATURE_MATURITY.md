@@ -128,10 +128,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 
 ## Testing Infrastructure
 
-- Unit tests: ~1700+ passing
-- Integration tests: YAML automation runner
 - Cross-platform CI: GitHub Actions matrix (ubuntu, macos, windows)
-- Docker tests: Isolated reproducible environment
 
 ---
 
