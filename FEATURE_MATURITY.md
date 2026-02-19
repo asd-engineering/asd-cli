@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.3.0 | **Last Updated:** 2026-02-10 | **Status:** ACTIVE
+**Version:** 1.4.0 | **Last Updated:** 2026-02-19 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 
@@ -29,6 +29,8 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Health checks | ✅ | Multi-level cascade (tunnel → HTTP → TCP → process) |
 | Service registry | ✅ | JSON-based state, upsert/remove/mark operations |
 | Dynamic port allocation | ✅ | Avoids conflicts, persists to .env |
+| `asd config validate` | 🟢 | Schema validation with `--json` output |
+| `asd skill install/list/status` | 🟢 | AI assistant skill management |
 
 ---
 
@@ -48,6 +50,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 
 | Service | Command | Status | Notes |
 |---------|---------|--------|-------|
+| Dashboard | `asd net` (TUI) | 🟢 | Auto-bundled, health monitoring |
 | Caddy Proxy | `asd caddy` | ✅ | Reverse proxy, path/host routing, TLS |
 | VS Code Server | `asd code` | 🟢 | Start/stop works, menu functional |
 | Web Terminal | `asd terminal` | 🟢 | ttyd-based, port persistence |
@@ -125,7 +128,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 
 ## Testing Infrastructure
 
-- Unit tests: ~1000+ passing
+- Unit tests: ~1700+ passing
 - Integration tests: YAML automation runner
 - Cross-platform CI: GitHub Actions matrix (ubuntu, macos, windows)
 - Docker tests: Isolated reproducible environment
@@ -156,6 +159,12 @@ Features progress through maturity levels as they gain:
 ---
 
 ## Changelog
+
+### v1.4.0 (2026-02-19)
+
+- Added Dashboard to Built-in Services (🟢 Stable)
+- Added `asd config validate` and `asd skill` to Core Features
+- Updated unit test count to ~1700+
 
 ### v1.3.0 (2026-02-10)
 

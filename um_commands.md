@@ -1,6 +1,6 @@
 # ASD CLI Command Reference
 
-**Version:** 2.0.2 | **Last Updated:** 2026-02-02
+**Version:** 2.1.7 | **Last Updated:** 2026-02-19
 
 Complete reference for all ASD CLI commands.
 
@@ -17,6 +17,8 @@ Complete reference for all ASD CLI commands.
 | `asd net` | Open network TUI |
 | `asd terminal` | Web terminal management |
 | `asd code` | VS Code server management |
+| `asd config validate` | Validate asd.yaml configuration |
+| `asd skill install` | Install AI assistant skills |
 | `asd update` | Update ASD CLI |
 
 ---
@@ -49,6 +51,20 @@ asd env-init              # Merge with existing .env
 asd env-init --override   # Replace entire .env
 asd env-init --yes        # Non-interactive mode
 ```
+
+### `asd config validate`
+
+Validate `asd.yaml` configuration against the schema.
+
+```bash
+asd config validate          # Human-readable output
+asd config validate --json   # JSON output (for CI/scripts)
+```
+
+**What it checks:**
+- Schema validation (required fields, types, structure)
+- Service configuration (valid dial addresses, paths)
+- Feature flags and plugin references
 
 ### `asd run <task>`
 
@@ -387,6 +403,22 @@ ASD_TUNNEL_TOKEN=your-token
 ASD_TUNNEL_USER=your-user-id
 ```
 
+### `asd token create`
+
+Create a tunnel token (credential) for authentication.
+
+```bash
+asd token create
+```
+
+### `asd token verify`
+
+Verify that current tunnel credentials are valid.
+
+```bash
+asd token verify
+```
+
 ### `asd auth status`
 
 Show current authentication status.
@@ -469,6 +501,38 @@ asd gh login
 
 ---
 
+## Skill Commands
+
+AI assistant skill management.
+
+### `asd skill install`
+
+Install skills for Claude Code and OpenAI Codex.
+
+```bash
+asd skill install            # Install for current project
+asd skill install --global   # Install globally
+asd skill install --yes      # Non-interactive
+```
+
+### `asd skill list`
+
+List available ASD skills.
+
+```bash
+asd skill list
+```
+
+### `asd skill status`
+
+Check installation status of skills.
+
+```bash
+asd skill status
+```
+
+---
+
 ## Logs
 
 View service logs.
@@ -539,6 +603,9 @@ Key environment variables for ASD:
 | `asd code` | 🟢 |
 | `asd database` | 🟢 |
 | `asd caddy` | ✅ |
+| `asd config validate` | 🟢 |
+| `asd token create/verify` | 🟢 |
+| `asd skill install/list/status` | 🟢 |
 | `asd gh` | 🟡 |
 | `asd inspect` | 🟠 |
 

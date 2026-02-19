@@ -1,6 +1,6 @@
 # ASD CLI User Manual
 
-**Version:** 2.1.0 | **Last Updated:** 2026-02-07
+**Version:** 2.1.7 | **Last Updated:** 2026-02-19
 
 Share local services over HTTPS with anyone, anywhere. No port forwarding, no firewall rules, no certificates to manage.
 
@@ -34,6 +34,7 @@ ASD CLI creates secure HTTPS tunnels from your local machine to the internet. Wi
 - Share a local development server with a teammate
 - Receive webhook callbacks from external APIs (payment providers, CI/CD pipelines, etc.)
 - Access your terminal or VS Code from any browser
+- Monitor all services from a built-in dashboard (`asd net`)
 - Demo your work without deploying
 
 ### Who It's For
@@ -1298,6 +1299,8 @@ Quick reference of most-used commands:
 | `asd net apply` | Apply configuration |
 | `asd terminal` | Web terminal menu |
 | `asd code` | VS Code server menu |
+| `asd config validate` | Validate asd.yaml configuration |
+| `asd skill install` | Install AI assistant skills |
 | `asd update` | Update ASD CLI |
 
 Full command reference: [um_commands.md](./um_commands.md)
