@@ -80,6 +80,7 @@ network:
 | `iframeOrigin` | `string\|null` | Origin for iframe embedding (`null` to disable) |
 | `deleteResponseHeaders` | `string[]` | Response headers to strip from upstream |
 | `ingressTag` | `string\|null` | Per-service ingress tag (overrides `ASD_INGRESS_TAG` env) |
+| `env` | `Record<string, string>` | Env vars written to `.env` during `net apply` (supports template macros) |
 
 > **Note:** `tunnelPreferred` and `tunnelPrefix` are deprecated aliases for `public` and `subdomain`. They still work for backward compatibility.
 
@@ -104,7 +105,7 @@ network:
 
 **Using service-ids in commands:**
 ```bash
-asd net tunnel start my-frontend    # Start tunnel for "my-frontend"
+asd net expose start my-frontend    # Start tunnel for "my-frontend"
 asd net stop api-server             # Stop "api-server"
 asd net open supabase:studio        # Open Supabase Studio in browser
 ```
@@ -275,6 +276,46 @@ network:
 
 The ingress tag is added as a response header. By default, all services use the value from the `ASD_INGRESS_TAG` environment variable (or `"local-caddy"`). Set `ingressTag` per-service to override, or set to `null` to disable.
 
+### Declarative Environment Variables
+
+Services can declare environment variables that are automatically written to `.env` during `asd net apply`. This is useful for configuring services with tunnel URLs that are only known after tunnels are created.
+
+```yaml
+network:
+  services:
+    frontend:
+      dial: "127.0.0.1:5173"
+      public: true
+      subdomain: app
+      env:
+        PUBLIC_WEBSITE_BASE_URL: "${{ macro.exposedOrigin() }}"
+        SUPABASE_AUTH_SITE_URL: "${{ macro.exposedOrigin() }}"
+```
+
+After `asd net apply`, your `.env` will contain:
+
+```bash
+PUBLIC_WEBSITE_BASE_URL=https://app-fkmc.cicd.eu1.asd.engineer
+SUPABASE_AUTH_SITE_URL=https://app-fkmc.cicd.eu1.asd.engineer
+```
+
+**Key behaviors:**
+
+- Values support all template macros (`${{ macro.* }}`, `${{ env.* }}`)
+- The parameterless `exposedOrigin()` reads the `subdomain` from the same service block
+- If tunnel credentials are not available, the env var is skipped (not written as empty)
+- Writing is idempotent — re-running `net apply` only writes if values changed
+- Use `exposedOriginWithAuth()` to include basic auth credentials in the URL
+
+**Example with auth URL:**
+
+```yaml
+env:
+  APP_URL: "${{ macro.exposedOriginWithAuth() }}"
+  # Result: https://admin:password@app-fkmc.cicd.eu1.asd.engineer
+  # Reads ASD_BASIC_AUTH_USERNAME and ASD_BASIC_AUTH_PASSWORD from .env
+```
+
 ---
 
 ## Plugins Configuration
@@ -359,30 +400,273 @@ Use these IDs in commands:
 
 ```bash
 asd net open supabase:studio    # Open in browser
-asd net tunnel start supabase:kong  # Start tunnel
+asd net expose start supabase:kong  # Start tunnel
 ```
 
-### Template Macros in Manifests
+### Template Macros Reference
 
-Plugin manifests and `asd.yaml` support `${{ }}` template expressions. These are expanded during service discovery before routes are applied.
+Plugin manifests and `asd.yaml` support two template syntaxes for dynamic values. Templates are expanded during service discovery, before routes are applied.
 
-**Environment Variables:**
+#### Syntax: `${{ }}` (Modern Templates)
+
+The primary syntax. Used in `asd.yaml`, service `env` fields, and plugin manifests.
 
 ```yaml
-hosts: ["localhost", "${{ env.MY_CUSTOM_HOST }}"]
+hosts: ["localhost", "${{ macro.tunnelHost('app') }}"]
+env:
+  MY_URL: "${{ macro.exposedOrigin() }}"
 ```
 
-Reads `MY_CUSTOM_HOST` from `.env` or `process.env`.
+#### Syntax: `${}` (Legacy Macros)
 
-**Tunnel Credential Macros:**
+Supported in `net.manifest.yaml` files for backward compatibility. Only macro functions are supported (not `env.*` or `core.*`).
 
-These macros resolve tunnel credentials directly from the credential registry — correct for all authentication types (SSH keys, tokens, ephemeral tokens) and server ownership types (shared, dedicated, self-hosted):
+```yaml
+port: "${getRandomPort()}"
+secret: "${getRandomString(length=32)}"
+```
+
+> **Note:** `${VAR_NAME}` (without function call syntax) is treated as an environment variable reference in legacy mode. The expander distinguishes between `${MY_VAR}` (env lookup) and `${getRandomPort()}` (macro invocation) automatically.
+
+---
+
+#### Environment Variables: `${{ env.* }}`
+
+Read values from the environment (`.env` or `process.env`).
+
+| Expression | Result | Description |
+|------------|--------|-------------|
+| `${{ env.MY_VAR }}` | Value of `MY_VAR` | Returns empty string if not set |
+| `${{ !env.MY_VAR }}` | `"true"` if empty/missing, `""` if set | Boolean negation operator |
+
+**Examples:**
+
+```yaml
+# Simple env var
+dial: "127.0.0.1:${{ env.APP_PORT }}"
+
+# Conditional: only include host when env var is set
+# (empty values are filtered by host expansion)
+hosts: ["localhost", "${{ env.CUSTOM_HOST }}"]
+
+# Negation: returns "true" when var is NOT set
+skip_auth: "${{ !env.REQUIRE_AUTH }}"
+```
+
+**Negation rules:**
+- Missing variable → `"true"`
+- Empty string `""` → `"true"`
+- Any non-empty value → `""` (empty string)
+
+---
+
+#### Core Expressions: `${{ core.* }}`
+
+System-level queries.
+
+| Expression | Returns | Description |
+|------------|---------|-------------|
+| `${{ core.isDockerAvailable() }}` | `"true"` or `"false"` | Whether Docker daemon is reachable |
+| `${{ !core.isDockerAvailable() }}` | Negated result | `"true"` when Docker is NOT available |
+
+**Example:**
+
+```yaml
+# Only add Docker-based route when Docker is running
+docker_route: "${{ core.isDockerAvailable() }}"
+```
+
+---
+
+#### Port Allocation: `${{ macro.getRandomPort() }}`
+
+Allocate a random available TCP port by probing the OS for a free port.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | string | — | Store result in env under this key |
+| `range` | string | — | Restrict to range `"MIN-MAX"` |
+| `persist` | boolean | `false` | Write to `.env` file |
+| `scope` | string | — | Port registry scope (prevents reuse within scope) |
+
+**Examples:**
+
+```yaml
+# Basic: allocate any free port
+port: "${{ macro.getRandomPort() }}"
+
+# Named: store as env var for other templates to reference
+port: "${{ macro.getRandomPort(name='APP_PORT') }}"
+
+# With range restriction
+port: "${{ macro.getRandomPort(range='8000-9000') }}"
+
+# Persist to .env so the port survives restarts
+port: "${{ macro.getRandomPort(name='CADDY_PORT', persist=true) }}"
+```
+
+---
+
+#### Multiple Ports: `${{ macro.getRandomPorts() }}`
+
+Allocate multiple unique ports in a single expression.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `n` | number | `2` | Number of ports to allocate |
+| `sep` | string | `","` | Separator between ports |
+| `range` | string | — | Restrict to range `"MIN-MAX"` |
+| `scope` | string | — | Port registry scope |
+
+**Examples:**
+
+```yaml
+# Three comma-separated ports
+ports: "${{ macro.getRandomPorts(n=3) }}"
+# Result: "42100,42101,42102"
+
+# Semicolon-separated
+ports: "${{ macro.getRandomPorts(n=2, sep=';') }}"
+# Result: "42100;42101"
+```
+
+---
+
+#### Port Range: `${{ macro.getPortRange() }}`
+
+Reserve a contiguous block of ports.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `size` | number | (required) | Number of ports in the range |
+| `min` | number | `1025` | Minimum port |
+| `max` | number | `65535` | Maximum port |
+| `name` | string | — | Store result in env |
+| `persist` | boolean | `false` | Write to `.env` file |
+| `scope` | string | — | Port registry scope |
+
+**Example:**
+
+```yaml
+# Reserve 10 contiguous ports
+port_range: "${{ macro.getPortRange(size=10, min=40000, max=41000) }}"
+# Result: "40123-40132"
+
+# Named, so other templates can use the range
+port_range: "${{ macro.getPortRange(size=5, name='WORKER_PORTS') }}"
+```
+
+---
+
+#### Random Strings: `${{ macro.getRandomString() }}`
+
+Generate cryptographically random strings.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `length` | number | `16` | Character count |
+| `charset` | string | `"alnum"` | Character set (see below) |
+| `prefix` | string | `""` | Prepended to result |
+| `suffix` | string | `""` | Appended to result |
+
+**Available charsets:**
+
+| Charset | Characters |
+|---------|------------|
+| `alnum` | `a-zA-Z0-9` (default) |
+| `hex` | `0-9a-f` |
+| `alpha` | `a-zA-Z` |
+| `safe` | `a-z0-9_-` (URL-safe) |
+
+**Examples:**
+
+```yaml
+# Default: 16 alphanumeric characters
+secret: "${{ macro.getRandomString() }}"
+# Result: "aB3xK9mP2sT7vW1y"
+
+# 32-character hex string
+api_key: "${{ macro.getRandomString(length=32, charset=hex) }}"
+# Result: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+
+# With prefix
+token: "${{ macro.getRandomString(length=24, prefix='sk_') }}"
+# Result: "sk_aB3xK9mP2sT7vW1yaB3xK9mP"
+
+# URL-safe charset
+slug: "${{ macro.getRandomString(length=8, charset=safe) }}"
+# Result: "ab3x-k9m"
+```
+
+---
+
+#### Bcrypt Hashing: `${{ macro.bcrypt() }}`
+
+Generate a bcrypt password hash. Uses the Caddy binary if available, otherwise falls back to a crypto-based hash.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `password` | string | (required) | The plaintext password |
+| `cost` | number | `12` | Bcrypt cost factor (4–16). Note: when Caddy binary is used, Caddy's own default cost applies. |
+
+**Example:**
+
+```yaml
+# Hash a password for Caddy basic auth config
+password_hash: "${{ macro.bcrypt(password='my-secret-password') }}"
+# Result: "$2a$14$..."
+```
+
+---
+
+#### Bcrypt from Env: `${{ macro.bcryptEnv() }}`
+
+Hash the value of an environment variable. Useful when the password is in `.env` and you need the hash in a config template.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| (positional) | string | Name of the env var to hash |
+
+**Example:**
+
+```yaml
+# Hash the value of ASD_BASIC_AUTH_PASSWORD from .env
+auth_hash: "${{ macro.bcryptEnv('ASD_BASIC_AUTH_PASSWORD') }}"
+# If ASD_BASIC_AUTH_PASSWORD=secret123, result: "$2a$14$..."
+```
+
+---
+
+#### Tunnel Credential Macros
+
+These macros resolve tunnel credentials directly from the credential registry — correct for all authentication types (SSH keys, tokens, ephemeral tokens) and server ownership types (shared, dedicated, self-hosted).
+
+**Graceful degradation:** When no tunnel credentials exist (e.g., fresh install), all tunnel macros return an empty string. Empty hosts are automatically filtered out from Caddy routes, so routes fall back to `localhost` only.
 
 | Macro | Returns | Example |
 |-------|---------|---------|
-| `${{ macro.tunnelHost("app") }}` | Full tunnel hostname | `app-fkmc.cicd.eu1.asd.engineer` |
-| `${{ macro.tunnelClientId() }}` | Client ID | `fkmc` |
+| `${{ macro.tunnelHost("app") }}` | Full tunnel hostname (no protocol) | `app-fkmc.cicd.eu1.asd.engineer` |
+| `${{ macro.tunnelClientId() }}` | Client ID (short form if available) | `fkmc` |
 | `${{ macro.tunnelEndpoint() }}` | Server FQDN | `cicd.eu1.asd.engineer` |
+| `${{ macro.exposedOrigin("app") }}` | Full origin URL with protocol | `https://app-fkmc.cicd.eu1.asd.engineer` |
+| `${{ macro.exposedOrigin() }}` | Origin from service context¹ | `https://app-fkmc.cicd.eu1.asd.engineer` |
+| `${{ macro.exposedOriginWithAuth("app") }}` | Origin with embedded basic auth | `https://user:pass@app-fkmc...` |
+| `${{ macro.exposedOriginWithAuth() }}` | Auth origin from context¹ | `https://user:pass@app-fkmc...` |
+
+¹ Parameterless variants read the `subdomain` from the service context (only available in service `env` fields).
+
+**`tunnelHost` vs `exposedOrigin`:**
+
+- `tunnelHost("app")` → `app-fkmc.cicd.eu1.asd.engineer` (hostname only, no protocol)
+- `exposedOrigin("app")` → `https://app-fkmc.cicd.eu1.asd.engineer` (full origin with protocol)
+
+Use `tunnelHost` in Caddy route `hosts` arrays. Use `exposedOrigin` in service `env` fields for URLs.
+
+**`exposedOriginWithAuth` behavior:**
+
+- Reads `ASD_BASIC_AUTH_USERNAME` and `ASD_BASIC_AUTH_PASSWORD` from env
+- Both must be set; if either is missing, returns the plain origin (no auth)
+- Special characters in credentials are URL-encoded (e.g., `@` → `%40`)
 
 **Example usage in a manifest:**
 
@@ -394,16 +678,37 @@ caddy:
       dial: "127.0.0.1:8080"
 ```
 
-When tunnel credentials are available, this creates routes for both `localhost` and the tunnel hostname. When no credentials exist (e.g., fresh install), the tunnel host resolves to an empty string and is automatically filtered out — routes only match `localhost`.
+When tunnel credentials are available, this creates routes for both `localhost` and the tunnel hostname. When no credentials exist, the tunnel host resolves to an empty string and is automatically filtered out — routes only match `localhost`.
 
-**Other macros:**
+**Localhost tunnels:**
 
-| Macro | Description |
-|-------|-------------|
-| `${{ macro.getRandomPort() }}` | Allocate a random available port |
-| `${{ macro.getRandomString(length=32) }}` | Generate a random string |
-| `${{ macro.bcrypt(password="...", cost=12) }}` | Generate bcrypt hash |
-| `${{ core.isDockerAvailable() }}` | Check if Docker is running |
+When `ASD_TUNNEL_HOST=localhost` (local development server), tunnel macros adjust automatically:
+- Protocol becomes `http://` instead of `https://`
+- Hostname format: `prefix-clientId.localhost:PORT`
+- Port read from `ASD_TUNNEL_SERVER_HTTP_PORT`
+
+---
+
+#### Context-Aware Macros in Service `env` Fields
+
+The `exposedOrigin()` and `exposedOriginWithAuth()` macros have a special parameterless form designed for service `env` fields. When used without arguments, they read the `subdomain` from the same service definition:
+
+```yaml
+network:
+  services:
+    frontend:
+      dial: "127.0.0.1:5173"
+      subdomain: app                              # ← this subdomain
+      env:
+        PUBLIC_URL: "${{ macro.exposedOrigin() }}" # ← reads "app" from above
+```
+
+This avoids repeating the subdomain. The parameterless form only works inside service `env` blocks where context is available. In manifest files, always pass the prefix explicitly.
+
+**Fallback behavior:**
+- No subdomain in service → returns empty string → env var is skipped
+- No tunnel credentials → returns empty string → env var is skipped
+- Both available → writes the resolved URL to `.env`
 
 ---
 
@@ -597,16 +902,16 @@ Create secure public URLs for local services.
 
 **From CLI:**
 ```bash
-asd net tunnel start <service-id>
-asd net tunnel start --all        # Start all tunnel-preferred services
+asd net expose start <service-id>
+asd net expose start --all        # Start all tunnel-preferred services
 ```
 
 ### Stopping Tunnels
 
 ```bash
-asd net tunnel stop <service-id>
-asd net tunnel stop --all
-asd net tunnel reset              # Kill all tunnels, clear state
+asd net expose stop <service-id>
+asd net expose stop --all
+asd net expose reset              # Kill all tunnels, clear state
 ```
 
 ### Tunnel Configuration
@@ -695,20 +1000,20 @@ ASD_TUNNEL_USER=your-user-id
 
 **Check status:**
 ```bash
-asd tunnel auth status             # Show auth status
+asd auth status                    # Show auth status
 ```
 
 > **Note:** CLI-based login (`asd login`) is coming in the next release.
 
-### Network Tunnel Control (`asd net tunnel`)
+### Network Tunnel Control (`asd net expose`)
 
 Enable/disable tunnels for services defined in `asd.yaml`:
 
 ```bash
-asd net tunnel start <service-id>  # Enable tunnel for service
-asd net tunnel start --all         # Enable all tunnel-preferred services
-asd net tunnel stop <service-id>   # Disable tunnel
-asd net tunnel reset               # Kill all tunnels, clear state
+asd net expose start <service-id>  # Enable tunnel for service
+asd net expose start --all         # Enable all tunnel-preferred services
+asd net expose stop <service-id>   # Disable tunnel
+asd net expose reset               # Kill all tunnels, clear state
 ```
 
 ### When to Use Each
@@ -716,9 +1021,9 @@ asd net tunnel reset               # Kill all tunnels, clear state
 | Need | Use |
 |------|-----|
 | Quick share a port | `asd expose <port>` |
-| Share a configured service | `asd net tunnel start <service-id>` |
-| Authenticate with hub | `asd tunnel auth login` or `asd login` |
-| Manage credentials | `asd tunnel auth ...` / `asd tunnel registry list` |
+| Share a configured service | `asd net expose start <service-id>` |
+| Authenticate with hub | `asd login` |
+| Manage credentials | `asd auth credentials` / `asd auth switch` |
 
 ---
 
@@ -860,7 +1165,7 @@ Logs are stored in `.asd/workspace/logs/`.
 | Command | Description |
 |---------|-------------|
 | `asd init` | Initialize workspace |
-| `asd login` | Login to ASD hub (shortcut for `asd tunnel auth login`) |
+| `asd login` | Login to ASD hub |
 | `asd help` | Show help |
 | `asd version` | Show version |
 | `asd update` | Self-update |
@@ -876,9 +1181,9 @@ Logs are stored in `.asd/workspace/logs/`.
 | `asd net start <id>` | Start a service |
 | `asd net stop <id>` | Stop a service |
 | `asd net open <id>` | Open service URL in browser |
-| `asd net tunnel start <id>` | Start tunnel for service |
-| `asd net tunnel stop <id>` | Stop tunnel for service |
-| `asd net tunnel reset` | Kill all tunnels, clear state |
+| `asd net expose start <id>` | Start tunnel for service |
+| `asd net expose stop <id>` | Stop tunnel for service |
+| `asd net expose reset` | Kill all tunnels, clear state |
 
 ### Service Commands
 
@@ -916,17 +1221,14 @@ Logs are stored in `.asd/workspace/logs/`.
 | `asd expose list` | List exposed services |
 | `asd expose stop <name>` | Stop exposed service |
 
-### Tunnel Commands
-
-**Authentication (for ASD hub):**
+### Auth Commands
 
 | Command | Description |
 |---------|-------------|
-| `asd tunnel auth status` | Show auth status |
-
-> **Note:** CLI-based login (`asd tunnel auth login`) is coming in the next release. For now, use ephemeral tokens or tunnel tokens from the web dashboard.
-
-> **Tip:** `asd login` is a convenient alias for `asd tunnel auth login`.
+| `asd login` | Login to ASD hub |
+| `asd auth status` | Show auth status |
+| `asd auth credentials` | Show all credentials |
+| `asd auth switch` | Interactive credential and server switcher |
 
 ### GitHub Commands
 

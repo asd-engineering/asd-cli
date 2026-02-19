@@ -6,6 +6,7 @@ Run ASD CLI on Android devices using [Termux](https://termux.dev/).
 
 - Android device (ARM64)
 - Termux app from [F-Droid](https://f-droid.org/packages/com.termux/) (recommended)
+- Node.js (`pkg install nodejs-lts`)
 
 > **Note:** The Google Play version of Termux may be outdated. F-Droid is recommended.
 
@@ -23,13 +24,17 @@ pkg update && pkg upgrade -y
 
 ### 3. Install ASD
 
-**Option A: Via install script** (recommended)
+**Option A: Install script** (recommended)
+
 ```bash
-pkg install curl
+pkg install nodejs-lts curl
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
+The installer auto-detects Termux via `$TERMUX_VERSION` and downloads the correct Termux-native build. No Bun required.
+
 **Option B: Via Bun** (for development)
+
 ```bash
 pkg install bun git
 # Clone your project with ASD submodule
@@ -38,6 +43,8 @@ cd your-project
 bun install
 ```
 
+> **Note:** Option A uses the same `install.sh` as all other platforms — it auto-detects Termux and downloads a pre-bundled Node.js script instead of the standard compiled binary. Option B requires Bun and downloads dependencies via `bun install`.
+
 ### 4. Initialize
 
 ```bash
@@ -45,6 +52,16 @@ cd your-project
 asd init
 asd net
 ```
+
+## How the Termux Build Works
+
+The standard `asd` binary is compiled with Bun (`bun build --compile`) which produces Linux ELF binaries incompatible with Android. The Termux build instead produces a **single Node.js script** with:
+
+1. A Termux Node.js shebang (`#!/data/data/com.termux/files/usr/bin/node`)
+2. A Bun API polyfill (implements `Bun.spawn`, `Bun.file`, `Bun.serve`, etc. using Node.js APIs)
+3. All CLI code and dependencies bundled into one file
+
+This runs natively under Termux's Node.js without needing Bun installed.
 
 ## Termux-Specific Notes
 
@@ -111,6 +128,18 @@ termux-setup-storage
 Termux may need wake lock for background connections:
 ```bash
 termux-wake-lock
+```
+
+### Node.js version
+
+The Termux build requires Node.js 22+. Check your version:
+```bash
+node --version
+```
+
+If outdated:
+```bash
+pkg install nodejs-lts
 ```
 
 ---

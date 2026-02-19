@@ -92,37 +92,35 @@ Get a public URL in seconds.
 
 ### Step 1: Install
 
-| Platform | Command |
-|----------|---------|
-| Linux/macOS | `curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh \| bash` |
-| Windows | `powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 \| iex"` |
+**Linux / macOS:**
 
-**Windows Note:** The install command bypasses script execution policy for just this installer.
-After install, `asd` will be at `%LOCALAPPDATA%\asd\bin\asd.exe`. Add to PATH if prompted.
-
-**Windows Terminal Recommendation:**
-
-For the best experience on Windows, we recommend:
-
-| Terminal | Status | Notes |
-|----------|--------|-------|
-| **Git Bash** | Recommended | Full Unix compatibility, best support |
-| Windows Terminal + PowerShell | Tested | Works well |
-| CMD.exe | Tested | Works with `asd.exe` |
-
-Git Bash comes with [Git for Windows](https://git-scm.com/download/win) and provides
-a Unix-like environment that matches our documentation examples.
-
-**Windows Install Location:**
-
-The installer places `asd.exe` at `%LOCALAPPDATA%\asd\bin\asd.exe` and prompts to add this to your PATH.
-If you skip the PATH prompt, you can run it directly:
-
-```cmd
-%LOCALAPPDATA%\asd\bin\asd --version
+```bash
+curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
-Or add to PATH manually in System Settings > Environment Variables.
+**Windows PowerShell:**
+
+```powershell
+irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex
+```
+
+**Windows CMD:**
+
+```cmd
+curl -fsSL -o %TEMP%\install.ps1 https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1
+powershell -ExecutionPolicy Bypass -File %TEMP%\install.ps1
+```
+
+**Self-update** (all platforms):
+
+```bash
+asd update
+```
+
+> **Windows notes:**
+> - Binary installs to `%LOCALAPPDATA%\asd\bin\asd.exe`. Add to PATH if prompted.
+> - For the best experience, use [Git Bash](https://git-scm.com/download/win) (recommended), Windows Terminal + PowerShell, or CMD.exe.
+> - If you skip the PATH prompt, run directly: `%LOCALAPPDATA%\asd\bin\asd --version`
 
 ### Step 2: Start Your Local Server
 
@@ -329,6 +327,32 @@ network:
       subdomain: "api"
 ```
 
+**Automatic environment variables:**
+
+Services can declare env vars that are automatically written to `.env` when tunnels are created. This is useful for apps that need their own public URL (e.g., OAuth callbacks, CORS origins):
+
+```yaml
+network:
+  services:
+    frontend:
+      dial: "127.0.0.1:5173"
+      public: true
+      subdomain: "frontend"
+      env:
+        PUBLIC_URL: "${{ macro.exposedOrigin() }}"
+        AUTH_CALLBACK_URL: "${{ macro.exposedOrigin() }}/auth/callback"
+```
+
+After `asd net apply`, `.env` will contain:
+```bash
+PUBLIC_URL=https://frontend-abc123.cicd.eu1.asd.engineer
+AUTH_CALLBACK_URL=https://frontend-abc123.cicd.eu1.asd.engineer/auth/callback
+```
+
+The parameterless `exposedOrigin()` reads the subdomain from the same service definition. Values support all template macros: `${{ env.* }}` for env vars, `${{ macro.* }}` for dynamic values. If tunnel credentials aren't available yet, the env var is simply skipped (not written as empty).
+
+See [Template Macros Reference](./um_asd_yaml.md#template-macros-reference) for the full list of available macros including port allocation, random strings, bcrypt hashing, and more.
+
 **Apply and start:**
 
 ```bash
@@ -367,8 +391,8 @@ ttyd gives you a full shell session in your web browser. Perfect for:
 **1. Set credentials** (in `.env` or environment):
 
 ```bash
-TTYD_USERNAME=admin
-TTYD_PASSWORD=your-secure-password
+ASD_TTYD_USERNAME=admin
+ASD_TTYD_PASSWORD=your-secure-password
 ```
 
 **2. Start the terminal:**
@@ -423,19 +447,19 @@ All ttyd settings go in your `.env` file:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TTYD_PORT` | (auto) | Port number (auto-assigned if not set) |
-| `TTYD_USERNAME` | (required) | Login username |
-| `TTYD_PASSWORD` | (required) | Login password |
-| `TTYD_SHELL_CMD` | `bash` | Shell to run (`bash`, `zsh`, `fish`) |
-| `TTYD_CWD` | workspace | Starting directory |
-| `TTYD_PATH` | `/` | URL path prefix |
+| `ASD_TTYD_PORT` | (auto) | Port number (auto-assigned if not set) |
+| `ASD_TTYD_USERNAME` | (required) | Login username |
+| `ASD_TTYD_PASSWORD` | (required) | Login password |
+| `ASD_TTYD_SHELL_CMD` | `bash` | Shell to run (`bash`, `zsh`, `fish`) |
+| `ASD_TTYD_CWD` | workspace | Starting directory |
+| `ASD_TTYD_PATH` | `/` | URL path prefix |
 
 **Example `.env`:**
 
 ```bash
-TTYD_USERNAME=developer
-TTYD_PASSWORD=dev-secret-123
-TTYD_SHELL_CMD=zsh
+ASD_TTYD_USERNAME=developer
+ASD_TTYD_PASSWORD=dev-secret-123
+ASD_TTYD_SHELL_CMD=zsh
 ```
 
 ### Remote Access Setup
@@ -475,8 +499,8 @@ When project-level authentication is enabled, ttyd automatically gets protected.
 
 ```bash
 # Set in .env:
-TTYD_USERNAME=admin
-TTYD_PASSWORD=your-password
+ASD_TTYD_USERNAME=admin
+ASD_TTYD_PASSWORD=your-password
 ```
 
 **"Port already in use":**
@@ -822,8 +846,8 @@ These services provide shell or code access - they should **always** have authen
 **ttyd credentials:**
 
 ```bash
-TTYD_USERNAME=admin
-TTYD_PASSWORD=your-ttyd-password
+ASD_TTYD_USERNAME=admin
+ASD_TTYD_PASSWORD=your-ttyd-password
 ```
 
 **codeserver credentials:**
@@ -877,7 +901,7 @@ asd expose 3000
 
 ### Password Best Practices
 
-For `ASD_BASIC_AUTH_PASSWORD`, `TTYD_PASSWORD`, and `ASD_CODESERVER_PASSWORD`:
+For `ASD_BASIC_AUTH_PASSWORD`, `ASD_TTYD_PASSWORD`, and `ASD_CODESERVER_PASSWORD`:
 
 - **Minimum 12 characters**
 - **Mix of letters, numbers, symbols**
@@ -1104,6 +1128,49 @@ Restart your terminal after adding to PATH.
 </details>
 
 <details>
+<summary><strong>Windows: Antivirus flags asd as suspicious</strong></summary>
+
+ASD's binary installer downloads and manages tool binaries (Caddy, ttyd, GitHub CLI, etc.) on your behalf. This involves operations that antivirus heuristics sometimes flag:
+
+- Downloading executables from the internet
+- Extracting zip archives via PowerShell
+- Creating `.cmd` wrapper scripts for Unix compatibility
+
+**Why this happens:** Windows Defender and other AV engines use behavioral heuristics that flag patterns common in both legitimate DevOps tools and malware. Compiled JavaScript runtimes (Bun/Node.js) are especially prone to false positives.
+
+**What we do to prevent it:**
+
+- All PowerShell calls use `execFileSync("powershell.exe", [args])` with argument arrays (not string interpolation)
+- Browser opening uses `explorer.exe` (not `cmd /c start`)
+- No direct `cmd.exe` or `powershell.exe` spawning for shell commands
+- No detached hidden processes (`detached: true` + `stdio: "ignore"`)
+- Automated AV pattern scanning in CI catches risky code patterns before release
+
+**If your AV blocks asd:**
+
+1. **Whitelist the install directory:** Add `%LOCALAPPDATA%\asd\` to your AV exclusion list
+2. **Report the false positive:** Submit `asd.exe` to your AV vendor's false positive portal:
+   - [Microsoft Defender](https://www.microsoft.com/en-us/wdsi/filesubmission) (select "Software developer")
+   - [BitDefender](https://www.bitdefender.com/consumer/support/answer/29358/)
+3. **Verify integrity:** Run `asd --version` to confirm the binary is authentic
+
+</details>
+
+<details>
+<summary><strong>Windows: Post-installation details</strong></summary>
+
+See [Quick Start > Step 1: Install](#step-1-install) for all install commands (PowerShell, CMD, Linux/macOS).
+
+**After installation:**
+
+Binary downloads (Caddy, ttyd, gh, busybox) are managed automatically. On Windows:
+- Zip archives are extracted via PowerShell `Expand-Archive` (AV-safe)
+- A `bash.cmd` wrapper is created for Unix shell compatibility via BusyBox
+- All binaries are stored in `%LOCALAPPDATA%\asd\bin\`
+
+</details>
+
+<details>
 <summary><strong>Port already in use</strong></summary>
 
 Another process is using the port.
@@ -1127,13 +1194,13 @@ Authentication or network issues.
 
 ```bash
 # Check auth status
-asd tunnel auth status
+asd auth status
 
 # Re-login
 asd login
 
 # Reset tunnels
-asd net tunnel reset
+asd net expose reset
 ```
 </details>
 
@@ -1389,54 +1456,27 @@ For authenticated API access with longer-lived tokens, see [API Reference](./um_
 
 ---
 
-## 12. Plugins & Extensibility
+## 12. Supabase Integration
 
-ASD's functionality can be extended through modules and plugins.
+ASD includes built-in Supabase support. When enabled, ASD automatically detects running Supabase services, routes them through Caddy, and makes them available in the `asd net` TUI.
 
-### Modules vs Plugins
-
-ASD has two extension mechanisms:
-
-| Aspect | Modules | Plugins |
-|--------|---------|---------|
-| **What they do** | Add CLI commands | Add network services |
-| **Scope** | User actions | Service discovery, routing |
-| **Registration** | `registerCommand()` | `net.manifest.yaml` |
-| **Example** | `asd caddy start` | Supabase dashboard in TUI |
-
-**Key insight:** Plugins are networking extensions inside modules. They define services that appear in `asd net` automatically.
-
-### Built-in Modules
-
-| Module | Commands | What It Does |
-|--------|----------|--------------|
-| `caddy` | `start`, `stop`, `restart` | Local reverse proxy |
-| `terminal` | `start`, `stop` | Web-based terminal (ttyd) |
-| `code` | `start`, `stop` | VS Code in browser |
-| `database` | `start`, `stop` | Database UI (DbGate) |
-| `tunnel` | `auth`, `registry` | Tunnel management |
-
-### The Supabase Plugin
-
-The Supabase plugin is an example of how plugins extend ASD's networking.
-
-**Enable in asd.yaml:**
+### Enable in asd.yaml
 
 ```yaml
 project:
   name: "my-app"
-  plugins: [supabase]           # Enable plugin
+  plugins: [supabase]
 ```
 
-**What you get:**
+### What you get
 
-When enabled, the Supabase plugin:
+When enabled, ASD:
 1. Detects running Supabase services
 2. Registers them in the network
 3. Creates Caddy routes for each service
 4. Makes them available in the `asd net` TUI
 
-**Plugin-provided services:**
+**Services:**
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -1444,21 +1484,19 @@ When enabled, the Supabase plugin:
 | `supabase:kong` | 54321 | API Gateway |
 | `supabase:mailpit` | 54324 | Email testing UI |
 
-**Plugin commands:**
+### Commands
 
 ```bash
-# Bootstrap Supabase + extract env vars
-asd plugin:supabase:bootstrap
+# Bootstrap Supabase + extract env vars to .env
+asd supabase bootstrap
 
 # Start/stop Supabase services
-asd plugin:supabase:start
-asd plugin:supabase:stop
+asd supabase start
+asd supabase stop
 
-# Extract environment variables
-asd plugin:supabase:extract
+# Extract environment variables to .env
+asd supabase extract
 ```
-
-**Automatic environment extraction:**
 
 The `bootstrap` command extracts credentials from Supabase and adds them to `.env`:
 
@@ -1470,104 +1508,13 @@ SUPABASE_DB_URL_LOCAL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 # ... and more
 ```
 
-### Package Manifests (Monorepo Support)
+### Future Integrations
 
-For monorepo projects, ASD can auto-discover services from package subdirectories. Each package can define its own `net.manifest.yaml`.
-
-**Directory structure:**
-
-```
-my-project/
-├── asd.yaml
-├── packages/
-│   ├── api/
-│   │   └── net.manifest.yaml    # Auto-discovered
-│   ├── web/
-│   │   └── net.manifest.yaml    # Auto-discovered
-│   └── admin/
-│       └── net.manifest.yaml    # Auto-discovered
-```
-
-**Configuration priority:**
-
-| Priority | Method | Example |
-|----------|--------|---------|
-| 1 (highest) | Environment variable | `ASD_PACKAGE_MANIFESTS_DIR=services` |
-| 2 | asd.yaml config | `project.package_manifests_dir: "apps"` |
-| 3 (default) | Default directory | `packages/` (if exists) |
-
-**Example asd.yaml:**
-
-```yaml
-version: 1
-project:
-  name: "my-monorepo"
-  package_manifests_dir: "apps"   # Look in apps/ instead of packages/
-```
-
-**When to use:** Monorepos, microservices, or projects where teams manage their own service definitions independently.
-
-### How Plugins Work
-
-Plugins define a network manifest (`net.manifest.yaml`) that tells ASD:
-1. What services the plugin provides
-2. How to detect if services are running
-3. What routes to create in Caddy
-
-When you run `asd net apply`, ASD:
-1. Reads enabled plugins from `asd.yaml`
-2. Loads their manifests
-3. Checks which services are running
-4. Registers healthy services in the network
-5. Creates Caddy routes
-
-### Creating Custom Plugins
-
-Plugins live in `modules/<name>/` and need:
-
-```
-modules/my-plugin/
-├── index.mjs                   # Register commands
-├── scripts/
-│   ├── cli.mjs                 # CLI registration
-│   └── api.mjs                 # Business logic
-└── net.manifest.yaml           # Network services
-```
-
-**Example `net.manifest.yaml`:**
-
-```yaml
-services:
-  my-db:
-    dial: "127.0.0.1:3306"
-    description: "My Database"
-    healthCheck:
-      type: "tcp"
-```
-
-### Future Plugin Ideas
-
-As ASD grows, plugins could be added for:
-
-- **Redis** - Session management, caching
-- **Meilisearch** - Full-text search
-- **MinIO** - S3-compatible storage
-- **Keycloak** - Authentication server
-- **Temporal** - Workflow orchestration
+We plan to add more integrations over time (Redis, Meilisearch, MinIO, etc.). If you need a specific integration sooner, let us know.
 
 ---
 
 ## 13. Resources & Community
-
-### Open Source
-
-ASD is built on open source principles. Key components:
-
-- **SvelteKit Starter**: We're building on [CMSaasStarter](https://github.com/scosman/CMSaasStarter),
-  a production-ready SvelteKit + Supabase + Stripe template.
-
-- **ASD Open Source Edition**: We plan to release an open source version of ASD
-  with full integration. Contact us if you need it sooner!
 
 ### Get in Touch
 
@@ -1583,22 +1530,38 @@ ASD is built on open source principles. Key components:
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
+**Initialize workspace:**
+```bash
+asd init --yes
+```
+
 **Start development:**
 ```bash
 asd run dev               # Run 'dev' task from asd.yaml
 ```
 
-**Expose a port:**
+**Expose a service:**
 ```bash
 asd expose 3000
 ```
 
-**Web terminal:**
+**Diagnose connection:**
 ```bash
-TTYD_USERNAME=admin TTYD_PASSWORD=secret asd terminal start
+asd diagnose
 ```
 
-**VS Code:**
+**Switch tunnel server:**
+```bash
+asd server                # Interactive picker
+asd server list           # Show all servers
+```
+
+**Web terminal:**
+```bash
+asd terminal start
+```
+
+**VS Code in browser:**
 ```bash
 asd code start
 ```
@@ -1606,9 +1569,6 @@ asd code start
 **Stop everything:**
 ```bash
 asd down                  # Stop workspace services
-asd terminal stop
-asd code stop
-asd expose stop 3000
 ```
 
 ---
@@ -1623,7 +1583,7 @@ ASD Vault provides encrypted secret management backed by Supabase Vault (pgsodiu
 
 ```bash
 # Requires authentication
-asd tunnel auth login
+asd login
 
 # Store a secret
 asd vault set DATABASE_URL "postgres://user:pass@host:5432/db"
@@ -1698,15 +1658,7 @@ asd vault export ./backup/
 
 ### Plan Limits
 
-| Plan | Secrets Included |
-|------|-----------------|
-| Free | Not available |
-| Developer | 10 |
-| Pro | 50 |
-| Scale | 200 |
-| Enterprise | Unlimited |
-
-Need more? Purchase the **Vault addon** (€5/month per unit, +50 secrets) from the billing page.
+See [asd.host/pricing](https://asd.host/pricing) for current vault quotas and addon options.
 
 ### Web Dashboard
 

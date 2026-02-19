@@ -53,6 +53,13 @@ detect_platform() {
     arch="x64"  # Intel Mac
   fi
 
+  # Detect Termux on Android — standard Linux binaries won't work
+  # (Android requires PIE + Bionic libc, not glibc)
+  if [[ "$os" == "linux" && "$arch" == "arm64" && -n "${TERMUX_VERSION:-}" ]]; then
+    echo "termux-arm64"
+    return
+  fi
+
   echo "${os}-${arch}"
 }
 
@@ -100,6 +107,14 @@ install_asd() {
   platform=$(detect_platform)
   info "Detected platform: $platform"
 
+  # Termux build requires Node.js
+  if [[ "$platform" == "termux-arm64" ]]; then
+    if ! command -v node &>/dev/null; then
+      error "Node.js is required for Termux. Install it with: pkg install nodejs-lts"
+    fi
+    info "Node.js: $(node --version)"
+  fi
+
   # Initialize ACTIVE_REPO (will be set by get_latest_version)
   ACTIVE_REPO=""
   version=$(get_latest_version)
@@ -136,7 +151,7 @@ install_asd() {
     if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" 2>/dev/null; then
       if [[ "$repo_for_download" == "$REPO" ]]; then
         error "Download failed. Binary may not be available for '${platform}'.
-Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64.
+Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
 See https://github.com/asd-engineering/asd-cli/releases"
       else
         error "Download failed. For private repos, set GITHUB_TOKEN."
@@ -159,6 +174,28 @@ See https://github.com/asd-engineering/asd-cli/releases"
     bin_dir=$(find "$tmp_dir" -type d -name "bin" ! -path "$INSTALL_DIR/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
     cp -f "$bin_dir/"* "$INSTALL_DIR/"
+  fi
+
+  # Install assets to global ASD home
+  local asd_home="${ASD_HOME:-$HOME/.local/share/asd}"
+
+  # Dashboard
+  local dashboard_dir
+  dashboard_dir=$(find "$tmp_dir" -type d -name "dist" -path "*/dashboard/dist" | head -1)
+  if [[ -n "$dashboard_dir" ]]; then
+    mkdir -p "$asd_home/dashboard"
+    rm -rf "$asd_home/dashboard/dist"
+    cp -r "$dashboard_dir" "$asd_home/dashboard/dist"
+    info "Dashboard installed to $asd_home/dashboard/dist"
+  fi
+
+  # Modules (manifests, configs, templates)
+  local modules_dir
+  modules_dir=$(find "$tmp_dir" -type d -name "modules" -maxdepth 3 | head -1)
+  if [[ -n "$modules_dir" ]]; then
+    rm -rf "$asd_home/modules"
+    cp -r "$modules_dir" "$asd_home/modules"
+    info "Modules installed to $asd_home/modules/"
   fi
 
   # Make executable

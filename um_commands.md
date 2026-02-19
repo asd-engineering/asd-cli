@@ -214,16 +214,16 @@ Discover running services.
 asd net discover
 ```
 
-### `asd net tunnel`
+### `asd net expose`
 
 Manage tunnels for services.
 
 ```bash
-asd net tunnel start <service-id>    # Start tunnel
-asd net tunnel start --all           # Start all public services
-asd net tunnel stop <service-id>     # Stop tunnel
-asd net tunnel stop --all            # Stop all tunnels
-asd net tunnel reset                 # Kill all, clear state
+asd net expose start <service-id>    # Start tunnel
+asd net expose start --all           # Start all public services
+asd net expose stop <service-id>     # Stop tunnel
+asd net expose stop --all            # Stop all tunnels
+asd net expose reset                 # Kill all, clear state
 ```
 
 ### `asd net start/stop`
@@ -284,8 +284,8 @@ asd terminal stop     # Stop ttyd
 ```
 
 **Required environment:**
-- `TTYD_USERNAME` - Login username
-- `TTYD_PASSWORD` - Login password
+- `ASD_TTYD_USERNAME` - Login username
+- `ASD_TTYD_PASSWORD` - Login password
 
 ### `asd code`
 
@@ -387,15 +387,15 @@ ASD_TUNNEL_TOKEN=your-token
 ASD_TUNNEL_USER=your-user-id
 ```
 
-### `asd tunnel auth status`
+### `asd auth status`
 
 Show current authentication status.
 
 ```bash
-asd tunnel auth status
+asd auth status
 ```
 
-> **Note:** CLI-based login (`asd tunnel auth login`) is coming in the next release.
+> **Tip:** Use `asd login` to authenticate, `asd auth credentials` to view all credentials.
 
 ---
 
@@ -513,7 +513,7 @@ Key environment variables for ASD:
 | Service | Variables |
 |---------|-----------|
 | Basic Auth | `ASD_BASIC_AUTH_USERNAME`, `ASD_BASIC_AUTH_PASSWORD` |
-| ttyd | `TTYD_USERNAME`, `TTYD_PASSWORD`, `TTYD_PORT` |
+| ttyd | `ASD_TTYD_USERNAME`, `ASD_TTYD_PASSWORD`, `ASD_TTYD_PORT` |
 | code-server | `ASD_CODESERVER_AUTH`, `ASD_CODESERVER_PASSWORD`, `ASD_CODESERVER_PORT` |
 
 ---
@@ -534,7 +534,7 @@ Key environment variables for ASD:
 | `asd net` | ✅ |
 | `asd net apply` | ✅ |
 | `asd expose` | 🟢 |
-| `asd login` / `asd tunnel auth` | 🟢 |
+| `asd login` / `asd auth status` | 🟢 |
 | `asd terminal` | 🟢 |
 | `asd code` | 🟢 |
 | `asd database` | 🟢 |

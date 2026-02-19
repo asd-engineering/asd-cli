@@ -32,8 +32,8 @@ Browser-based terminal access powered by [ttyd](https://github.com/tsl0922/ttyd)
 
 ```bash
 # 1. Set credentials in .env
-TTYD_USERNAME=admin
-TTYD_PASSWORD=your-secure-password
+ASD_TTYD_USERNAME=admin
+ASD_TTYD_PASSWORD=your-secure-password
 
 # 2. Start
 asd terminal start
@@ -63,19 +63,19 @@ All settings via environment variables (`.env`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `TTYD_USERNAME` | Yes | - | Login username |
-| `TTYD_PASSWORD` | Yes | - | Login password |
-| `TTYD_PORT` | No | (auto) | Port number |
-| `TTYD_SHELL_CMD` | No | `bash` | Shell to run |
-| `TTYD_CWD` | No | workspace | Starting directory |
-| `TTYD_PATH` | No | `/` | URL path prefix |
+| `ASD_TTYD_USERNAME` | Yes | - | Login username |
+| `ASD_TTYD_PASSWORD` | Yes | - | Login password |
+| `ASD_TTYD_PORT` | No | (auto) | Port number |
+| `ASD_TTYD_SHELL_CMD` | No | `bash` | Shell to run |
+| `ASD_TTYD_CWD` | No | workspace | Starting directory |
+| `ASD_TTYD_PATH` | No | `/` | URL path prefix |
 
 **Example `.env`:**
 
 ```bash
-TTYD_USERNAME=developer
-TTYD_PASSWORD=dev-secret-123
-TTYD_SHELL_CMD=zsh
+ASD_TTYD_USERNAME=developer
+ASD_TTYD_PASSWORD=dev-secret-123
+ASD_TTYD_SHELL_CMD=zsh
 ```
 
 ### Remote Access
@@ -111,7 +111,7 @@ When project-level basic auth is enabled, ttyd routes through Caddy get addition
 
 | Problem | Solution |
 |---------|----------|
-| "Missing username/password" | Set `TTYD_USERNAME` and `TTYD_PASSWORD` in `.env` |
+| "Missing username/password" | Set `ASD_TTYD_USERNAME` and `ASD_TTYD_PASSWORD` in `.env` |
 | "Port in use" | `asd terminal stop` or kill the process on that port |
 | "Binary not found" | Run `asd init` to reinstall binaries |
 | "Can't connect via tunnel" | Check `asd net` - ensure hub service has tunnel URL |
@@ -523,7 +523,7 @@ This prevents port conflicts between services and allows multiple instances.
 
 ```bash
 # In .env
-TTYD_PORT=7681
+ASD_TTYD_PORT=7681
 ASD_CODESERVER_PORT=8080
 ```
 

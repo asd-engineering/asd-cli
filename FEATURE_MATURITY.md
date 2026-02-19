@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.2.0 | **Last Updated:** 2026-02-07 | **Status:** ACTIVE
+**Version:** 1.3.0 | **Last Updated:** 2026-02-10 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 
@@ -37,8 +37,8 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `asd expose <port>` | 🟢 | Quick one-command exposure, Caddy + tunnel |
-| `asd tunnel auth` | 🟡 | Token status check; CLI login coming soon |
-| `asd net tunnel start/stop` | 🟢 | Per-service tunnel control |
+| `asd auth status` | 🟡 | Credential status check |
+| `asd net expose start/stop` | 🟢 | Per-service tunnel control |
 | Public tunnels | 🟢 | Subdomain-based URLs via asd-tunnel binary |
 | Tunnel modes (caddy/direct) | 🟡 | Mode switching works, limited testing |
 
@@ -88,7 +88,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Web dashboard | 🟠 | View metadata at `/workspace/vault/` |
 | Plan-based quotas | 🟠 | Free: 0, Developer: 10, Pro: 50, Scale: 200 |
 
-> **Alpha:** Ready for testing. Requires `asd tunnel auth login` for authentication. API and CLI flags may change between releases.
+> **Alpha:** Ready for testing. Requires `asd login` for authentication. API and CLI flags may change between releases.
 
 ---
 
@@ -118,7 +118,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 |----------|--------|-------|
 | Linux (x64) | ✅ | Primary platform, full CI coverage |
 | macOS (x64/ARM) | ✅ | Tested in CI |
-| Windows (x64) | 🟢 | Binary works, some path edge cases |
+| Windows (x64) | 🟢 | Binary works, AV-hardened (VERSIONINFO, pattern scanning, Defender CI) |
 | Android (Termux/ARM64) | 🟡 | All binaries verified, see [um_termux.md](./um_termux.md) |
 
 ---
@@ -129,6 +129,19 @@ This document tracks the maturity level of ASD CLI features, helping users under
 - Integration tests: YAML automation runner
 - Cross-platform CI: GitHub Actions matrix (ubuntu, macos, windows)
 - Docker tests: Isolated reproducible environment
+
+---
+
+## Windows Security & AV Prevention
+
+| Measure | Status | Notes |
+|---------|--------|-------|
+| AV pattern scanner | ✅ | 20+ patterns blocked in CI (LOLBins, shell spawning, process hiding) |
+| Windows Defender CI scan | ✅ | Compiled exe scanned in CI before merge |
+| VERSIONINFO injection | ✅ | rcedit patches ProductName, CompanyName, etc. in release pipeline |
+| VirusTotal scanning | 🟢 | Automated scan of release binaries (optional, needs `VT_API_KEY`) |
+| Azure Trusted Signing | 🟡 | Infrastructure ready, degrades gracefully without secrets |
+| AV submission checklist | ✅ | Release summary includes Microsoft/BitDefender false positive links |
 
 ---
 
@@ -143,6 +156,12 @@ Features progress through maturity levels as they gain:
 ---
 
 ## Changelog
+
+### v1.3.0 (2026-02-10)
+
+- Added Windows Security & AV Prevention section
+- Updated Windows (x64) status notes with AV-hardening details
+- Documented VERSIONINFO injection, Defender CI scan, VirusTotal, Azure Trusted Signing
 
 ### v1.2.0 (2026-02-07)
 
