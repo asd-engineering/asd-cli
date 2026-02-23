@@ -176,8 +176,14 @@ See https://github.com/asd-engineering/asd-cli/releases"
     cp -f "$bin_dir/"* "$INSTALL_DIR/"
   fi
 
-  # Install assets to global ASD home
-  local asd_home="${ASD_HOME:-$HOME/.local/share/asd}"
+  # Install assets to global ASD home (must match CLI's getAsdHome() logic)
+  local asd_home="${ASD_HOME:-}"
+  if [[ -z "$asd_home" ]]; then
+    case "$(uname -s)" in
+      Darwin) asd_home="$HOME/Library/Application Support/asd" ;;
+      *)      asd_home="${XDG_DATA_HOME:-$HOME/.local/share}/asd" ;;
+    esac
+  fi
 
   # Dashboard
   local dashboard_dir
@@ -193,6 +199,7 @@ See https://github.com/asd-engineering/asd-cli/releases"
   local modules_dir
   modules_dir=$(find "$tmp_dir" -type d -name "modules" -maxdepth 3 | head -1)
   if [[ -n "$modules_dir" ]]; then
+    mkdir -p "$asd_home"
     rm -rf "$asd_home/modules"
     cp -r "$modules_dir" "$asd_home/modules"
     info "Modules installed to $asd_home/modules/"
