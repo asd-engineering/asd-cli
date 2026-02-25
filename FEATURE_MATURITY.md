@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.4.0 | **Last Updated:** 2026-02-19 | **Status:** ACTIVE
+**Version:** 1.6.0 | **Last Updated:** 2026-02-25 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 
@@ -31,6 +31,8 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Dynamic port allocation | ✅ | Avoids conflicts, persists to .env |
 | `asd config validate` | 🟢 | Schema validation with `--json` output |
 | `asd skill install/list/status` | 🟢 | AI assistant skill management |
+| `asd deps install/update` | 🟢 | Binary dependency management, version checking, checksum verification |
+| `asd ac install/remove/status` | 🟢 | Shell tab-completion for bash, zsh, fish |
 
 ---
 
@@ -95,6 +97,20 @@ This document tracks the maturity level of ASD CLI features, helping users under
 
 ---
 
+## CI Watcher — Autonomous Co-Developer
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `just ci-watch-start/stop` | 🟡 | systemd timer, 10-min polling interval |
+| CI failure detection | 🟡 | Polls `gh run list`, matches HEAD SHA |
+| Claude Code auto-fix | 🟡 | Spawns agent in tmux with Docker-only test isolation |
+| Desktop notifications | 🟡 | notify-send on failure detection and fix result |
+| Lockfile + stale cleanup | 🟡 | 30-min timeout, prevents duplicate runs |
+
+> **Beta:** Functional end-to-end. Requires Claude Code CLI with OAuth auth on host. All test execution isolated in Docker.
+
+---
+
 ## GitHub Integration
 
 | Feature | Status | Notes |
@@ -156,6 +172,21 @@ Features progress through maturity levels as they gain:
 ---
 
 ## Changelog
+
+### v1.7.0 (2026-02-25)
+
+- Added CI Watcher — Autonomous Co-Developer section (🟡 Beta)
+- Background systemd service that monitors CI and spawns Claude Code to auto-fix failures
+
+### v1.6.0 (2026-02-25)
+
+- Added `asd deps install/update` to Core Features (🟢 Stable)
+- Binary dependency management with checksum verification and GitHub rate limit protection
+
+### v1.5.0 (2026-02-25)
+
+- Added `asd ac` shell autocomplete to Core Features (🟢 Stable)
+- Supports bash, zsh, and fish with auto-detection
 
 ### v1.4.0 (2026-02-19)
 

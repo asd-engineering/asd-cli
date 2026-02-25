@@ -742,7 +742,6 @@ Manage environment variables only:
 ```bash
 asd env-init                # Merge with existing .env
 asd env-init --override     # Replace entire .env
-asd env-init --yes          # Non-interactive mode
 ```
 
 ### Workspace Structure

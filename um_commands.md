@@ -1,6 +1,6 @@
 # ASD CLI Command Reference
 
-**Version:** 2.1.7 | **Last Updated:** 2026-02-19
+**Version:** 2.2.0 | **Last Updated:** 2026-02-25
 
 Complete reference for all ASD CLI commands.
 
@@ -19,7 +19,10 @@ Complete reference for all ASD CLI commands.
 | `asd code` | VS Code server management |
 | `asd config validate` | Validate asd.yaml configuration |
 | `asd skill install` | Install AI assistant skills |
+| `asd deps install` | Install managed binaries |
+| `asd deps update` | Update binaries to latest versions |
 | `asd update` | Update ASD CLI |
+| `asd ac install` | Install shell tab-completions |
 
 ---
 
@@ -49,7 +52,6 @@ Manage environment variables in `.env` file.
 ```bash
 asd env-init              # Merge with existing .env
 asd env-init --override   # Replace entire .env
-asd env-init --yes        # Non-interactive mode
 ```
 
 ### `asd config validate`
@@ -533,6 +535,43 @@ asd skill status
 
 ---
 
+## Dependency Management
+
+Manage ASD's binary dependencies (Caddy, ttyd, code-server, gh, etc.).
+
+### `asd deps install`
+
+Install all managed binaries, or a specific one.
+
+```bash
+asd deps install                  # Install all
+asd deps install caddy            # Install specific binary
+asd deps install --force          # Force reinstall even if present
+```
+
+**What it does:**
+1. Downloads binaries from upstream (GitHub releases, official sites)
+2. Verifies integrity via SHA-256/SHA-512 checksums
+3. Installs to global location (`~/.local/share/asd/bin/`)
+
+### `asd deps update`
+
+Update all binaries to their latest upstream versions, or a specific one.
+
+```bash
+asd deps update                   # Update all outdated binaries
+asd deps update caddy             # Update specific binary
+```
+
+**What it does:**
+1. Checks each binary's latest version on GitHub
+2. Downloads and verifies new versions
+3. Shows summary of what was updated
+
+**Note:** Results are cached for 10 minutes to avoid excessive API calls. Uses `gh` CLI for authenticated requests when available.
+
+---
+
 ## Logs
 
 View service logs.
@@ -548,6 +587,87 @@ asd logs ttyd       # Terminal logs
 ```
 
 Logs are stored in `.asd/workspace/logs/`.
+
+---
+
+## Autocomplete
+
+Shell tab-completion for all ASD commands.
+
+### `asd ac install`
+
+Install shell completions. Auto-detects your shell, or specify one.
+
+```bash
+asd ac install          # Auto-detect (bash/zsh/fish)
+asd ac install bash     # Install for bash
+asd ac install zsh      # Install for zsh
+asd ac install fish     # Install for fish
+```
+
+After installing, open a new terminal (or `source ~/.bashrc`) and use Tab to complete:
+
+```
+asd ca<TAB>        → caddy
+asd caddy <TAB>    → start  stop  restart  config
+```
+
+### `asd ac remove`
+
+Remove shell completions.
+
+```bash
+asd ac remove           # Remove for detected shell
+asd ac remove bash      # Remove for bash
+```
+
+### `asd ac status`
+
+Show autocomplete installation status across all shells.
+
+```bash
+asd ac status
+```
+
+### `asd ac refresh`
+
+Refresh the completions cache (run after installing new commands or plugins).
+
+```bash
+asd ac refresh
+```
+
+---
+
+## Command Suggestions
+
+If you mistype a command, ASD will suggest similar commands:
+
+```
+$ asd deos
+Unknown command: deos
+
+  Did you mean?
+
+    deps install    Install managed binaries (--binary <name>, --force)
+    deps update     Update a binary to latest upstream version
+
+  Run 'asd --help' to see available commands.
+```
+
+If you mistype a subcommand within a valid group, ASD shows available subcommands:
+
+```
+$ asd caddy strat
+  Usage: asd caddy <command>
+
+  Available commands:
+
+    start    Start Caddy reverse proxy
+    stop     Stop Caddy reverse proxy
+    restart  Restart Caddy
+    config   Show Caddy configuration
+```
 
 ---
 
@@ -608,6 +728,8 @@ Key environment variables for ASD:
 | `asd skill install/list/status` | 🟢 |
 | `asd gh` | 🟡 |
 | `asd inspect` | 🟠 |
+| `asd deps install/update` | 🟢 |
+| `asd ac install/remove/status/refresh` | 🟢 |
 
 ---
 

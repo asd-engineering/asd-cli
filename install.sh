@@ -220,11 +220,29 @@ See https://github.com/asd-engineering/asd-cli/releases"
 
     # Check if in PATH
     if ! command -v asd &>/dev/null; then
-      warn "~/.local/bin is not in your PATH. Add this to your shell config:"
+      # Detect shell RC file
+      local shell_rc="$HOME/.bashrc"
+      case "${SHELL:-}" in
+        */zsh)  shell_rc="$HOME/.zshrc" ;;
+        */fish) shell_rc="" ;;
+        */bash)
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            shell_rc="$HOME/.bash_profile"
+          fi
+          ;;
+      esac
+
+      if [[ -z "$shell_rc" ]]; then
+        # fish shell
+        warn "~/.local/bin is not in your PATH. Run this to fix it:"
+        echo ""
+        echo "  fish_add_path ~/.local/bin"
+      else
+        warn "~/.local/bin is not in your PATH. Run this to fix it:"
+        echo ""
+        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> $shell_rc && source $shell_rc"
+      fi
       echo ""
-      echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-      echo ""
-      info "Then restart your shell or run: source ~/.bashrc"
     fi
   else
     error "Installation failed - binary not found"

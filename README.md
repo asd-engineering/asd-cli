@@ -407,8 +407,8 @@ asd terminal start
 | Method | URL |
 |--------|-----|
 | Local Direct | `http://localhost:<port>/` |
-| Via Caddy | `http://asd.localhost/asde/ttyd/` |
-| Via Tunnel | `https://xxx.cicd.eu1.asd.engineer/asde/ttyd/` |
+| Via Caddy | `http://asd.localhost/asde/terminal/` |
+| Via Tunnel | `https://xxx.cicd.eu1.asd.engineer/asde/terminal/` |
 
 **4. Stop when done:**
 
@@ -427,8 +427,8 @@ Status: Running on port 7681
 
 Access URLs:
   Local:  http://admin:***@localhost:7681/
-  Caddy:  http://asd.localhost/asde/ttyd/
-  Tunnel: https://hub-abc123.cicd.eu1.asd.engineer/asde/ttyd/
+  Caddy:  http://asd.localhost/asde/terminal/
+  Tunnel: https://hub-abc123.cicd.eu1.asd.engineer/asde/terminal/
 
 Actions:
   [1] Open in browser
@@ -1022,7 +1022,7 @@ http://asd.localhost/<path>/
 Example: `http://asd.localhost/api/`
 
 Built-in services use the `/asde/` path prefix:
-- ttyd: `http://asd.localhost/asde/ttyd/`
+- terminal: `http://asd.localhost/asde/terminal/`
 - codeserver: `http://asd.localhost/asde/codeserver/`
 
 **When to use:**
@@ -1062,7 +1062,7 @@ Browser --> ASD Cloud --> SSH Tunnel --> Caddy --> Your App
 | Service | Local | Caddy | Tunnel |
 |---------|-------|-------|--------|
 | Your app | `http://localhost:3000` | `http://myapp.localhost` | `https://myapp-xxx.cicd.eu1.asd.engineer` |
-| ttyd | `http://localhost:7681` | `http://asd.localhost/asde/ttyd/` | `https://hub-xxx.../asde/ttyd/` |
+| terminal | `http://localhost:7681` | `http://asd.localhost/asde/terminal/` | `https://hub-xxx.../asde/terminal/` |
 | codeserver | `http://localhost:8080` | `http://asd.localhost/asde/codeserver/` | `https://hub-xxx.../asde/codeserver/` |
 
 ### Finding Your URLs

@@ -52,8 +52,8 @@ After starting, you get three access methods:
 | Method | URL Format | Use Case |
 |--------|------------|----------|
 | **Local** | `http://localhost:<port>/` | Same machine |
-| **Caddy** | `http://asd.localhost/asde/ttyd/` | Local network |
-| **Tunnel** | `https://hub-xxx.cicd.eu1.asd.engineer/asde/ttyd/` | Anywhere |
+| **Caddy** | `http://asd.localhost/asde/terminal/` | Local network |
+| **Tunnel** | `https://hub-xxx.cicd.eu1.asd.engineer/asde/terminal/` | Anywhere |
 
 The `asd terminal` menu shows all URLs with the correct port and credentials.
 
@@ -267,7 +267,7 @@ asd database stop
 | Method | URL Format |
 |--------|------------|
 | **Local** | `http://localhost:<port>/` |
-| **Caddy** | `http://asd.localhost/asde/dbgate/` |
+| **Caddy** | `http://asd.localhost/asde/database/` |
 | **Tunnel** | Via hub tunnel path |
 
 ### Configuration
