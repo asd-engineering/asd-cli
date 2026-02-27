@@ -8,6 +8,10 @@
 # 3. Add to PATH if needed
 #
 # After installation, update with: asd update
+#
+# NOTE: AVX baseline builds are currently Linux-only. Windows does not need
+# a baseline build at this time (all supported Windows x64 CPUs have AVX).
+# If this changes in the future, add AVX detection here.
 
 $ErrorActionPreference = "Stop"
 
@@ -108,25 +112,51 @@ function Install-Asd {
         Write-Info "Extracting..."
         Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
 
-        # Copy binary to install directory
-        $sourceBin = Join-Path $extractDir "bin\asd.exe"
-        if (-not (Test-Path $sourceBin)) {
-            $sourceBin = Join-Path $extractDir "asd.exe"
-        }
-
-        if (-not (Test-Path $sourceBin)) {
+        # Copy binary to install directory (search subdirectory structure)
+        $sourceBin = Get-ChildItem -Path $extractDir -Recurse -Filter "asd.exe" | Select-Object -First 1
+        if (-not $sourceBin) {
             Write-Error "Binary not found in archive"
         }
 
         $destBin = Join-Path $InstallDir "asd.exe"
-        Copy-Item -Path $sourceBin -Destination $destBin -Force
+        Copy-Item -Path $sourceBin.FullName -Destination $destBin -Force
 
-        # Also copy helper binaries if present
+        # Also copy helper binaries if present (check subdirectory structure too)
         $binDir = Join-Path $extractDir "bin"
-        if (Test-Path $binDir) {
+        if (-not (Test-Path $binDir)) {
+            $binDir = Get-ChildItem -Path $extractDir -Directory | ForEach-Object {
+                Join-Path $_.FullName "bin"
+            } | Where-Object { Test-Path $_ } | Select-Object -First 1
+        }
+        if ($binDir -and (Test-Path $binDir)) {
             Get-ChildItem -Path $binDir -Filter "*.exe" | ForEach-Object {
                 Copy-Item -Path $_.FullName -Destination $InstallDir -Force
             }
+        }
+
+        # Install assets to global ASD home
+        $asdHome = if ($env:ASD_HOME) { $env:ASD_HOME } else { "$env:LOCALAPPDATA\asd" }
+
+        # Find and install modules
+        $modulesDir = Get-ChildItem -Path $extractDir -Directory -Recurse -Depth 2 |
+            Where-Object { $_.Name -eq "modules" } | Select-Object -First 1
+        if ($modulesDir) {
+            $destModules = Join-Path $asdHome "modules"
+            New-Item -ItemType Directory -Path $asdHome -Force | Out-Null
+            if (Test-Path $destModules) { Remove-Item -Path $destModules -Recurse -Force }
+            Copy-Item -Path $modulesDir.FullName -Destination $destModules -Recurse
+            Write-Info "Modules installed to $destModules\"
+        }
+
+        # Find and install dashboard
+        $dashboardDist = Get-ChildItem -Path $extractDir -Directory -Recurse -Depth 3 |
+            Where-Object { $_.Name -eq "dist" -and $_.Parent.Name -eq "dashboard" } | Select-Object -First 1
+        if ($dashboardDist) {
+            $destDashboard = Join-Path $asdHome "dashboard\dist"
+            New-Item -ItemType Directory -Path (Join-Path $asdHome "dashboard") -Force | Out-Null
+            if (Test-Path $destDashboard) { Remove-Item -Path $destDashboard -Recurse -Force }
+            Copy-Item -Path $dashboardDist.FullName -Destination $destDashboard -Recurse
+            Write-Info "Dashboard installed to $destDashboard\"
         }
 
         # Verify installation

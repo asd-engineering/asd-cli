@@ -29,6 +29,18 @@ info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
+get_asd_home() {
+  if [[ -n "${ASD_HOME:-}" ]]; then
+    echo "$ASD_HOME"
+    return
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    echo "$HOME/Library/Application Support/asd"
+  else
+    echo "${XDG_DATA_HOME:-$HOME/.local/share}/asd"
+  fi
+}
+
 # Detect platform
 detect_platform() {
   local os arch
@@ -60,7 +72,21 @@ detect_platform() {
     return
   fi
 
-  echo "${os}-${arch}"
+  local result="${os}-${arch}"
+
+  # Linux x64: check if CPU supports AVX2 instructions
+  # Bun's default x64 binary requires AVX2 (Haswell/2013+ CPUs).
+  # Older CPUs without AVX2 will segfault. Use the baseline build (SSE4.2/Nehalem).
+  if [[ "$result" == "linux-x64" ]]; then
+    if [[ -f /proc/cpuinfo ]] && ! grep -q ' avx2 ' /proc/cpuinfo 2>/dev/null; then
+      # warn to stderr — this function returns via stdout echo
+      warn "CPU does not support AVX2 instructions. Using baseline (compatible) build." >&2
+      warn "Consider upgrading to a newer CPU for better performance." >&2
+      result="linux-x64-baseline"
+    fi
+  fi
+
+  echo "$result"
 }
 
 # Get latest release tag using GitHub API
@@ -107,8 +133,23 @@ install_asd() {
   platform=$(detect_platform)
   info "Detected platform: $platform"
 
-  # Termux build requires Node.js
+  # Termux: install required packages and verify Node.js
   if [[ "$platform" == "termux-arm64" ]]; then
+    info "Installing Termux dependencies..."
+    local termux_pkgs=()
+
+    # Core requirement
+    command -v node &>/dev/null || termux_pkgs+=(nodejs-lts)
+
+    # Helper binaries (not in CI tarball)
+    command -v caddy &>/dev/null || termux_pkgs+=(caddy)
+    command -v ttyd &>/dev/null || termux_pkgs+=(ttyd)
+
+    if [[ ${#termux_pkgs[@]} -gt 0 ]]; then
+      info "Installing: ${termux_pkgs[*]}"
+      pkg install -y "${termux_pkgs[@]}" || warn "Some packages failed to install"
+    fi
+
     if ! command -v node &>/dev/null; then
       error "Node.js is required for Termux. Install it with: pkg install nodejs-lts"
     fi
@@ -151,7 +192,7 @@ install_asd() {
     if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" 2>/dev/null; then
       if [[ "$repo_for_download" == "$REPO" ]]; then
         error "Download failed. Binary may not be available for '${platform}'.
-Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
+Available platforms: linux-x64, linux-x64-baseline, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
 See https://github.com/asd-engineering/asd-cli/releases"
       else
         error "Download failed. For private repos, set GITHUB_TOKEN."
@@ -160,6 +201,12 @@ See https://github.com/asd-engineering/asd-cli/releases"
   fi
 
   info "Extracting to $INSTALL_DIR..."
+
+  # Remove stale symlinks in INSTALL_DIR (e.g., leftover from previous installs pointing to deleted targets)
+  for f in "$INSTALL_DIR"/asd "$INSTALL_DIR"/bun "$INSTALL_DIR"/asd-tunnel; do
+    [[ -L "$f" && ! -e "$f" ]] && rm -f "$f"
+  done
+
   if [[ "$archive_name" == *.zip ]]; then
     unzip -q -o "$tmp_dir/$archive_name" -d "$tmp_dir/extracted"
     # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
@@ -174,6 +221,31 @@ See https://github.com/asd-engineering/asd-cli/releases"
     bin_dir=$(find "$tmp_dir" -type d -name "bin" ! -path "$INSTALL_DIR/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
     cp -f "$bin_dir/"* "$INSTALL_DIR/"
+
+    # Install bundled code-server runtime if present (Linux/macOS bundles)
+    local code_server_root asd_home_cs
+    code_server_root=$(find "$tmp_dir" -type d -path "*/code-server/bin" | head -1 | sed 's#/bin$##')
+    if [[ -n "$code_server_root" ]]; then
+      asd_home_cs=$(get_asd_home)
+      mkdir -p "$asd_home_cs"
+      rm -rf "$asd_home_cs/code-server"
+      cp -Rf "$code_server_root" "$asd_home_cs/code-server"
+      chmod +x "$asd_home_cs/code-server/bin/code-server" 2>/dev/null || true
+      info "Installed bundled code-server to: $asd_home_cs/code-server"
+    fi
+
+    # Copy bundled helper binaries (caddy, ttyd) to ASD global bin dir
+    # so the CLI binary installer finds them at ~/.local/share/asd/bin/
+    local asd_bin_dir
+    asd_bin_dir="$(get_asd_home)/bin"
+    mkdir -p "$asd_bin_dir"
+    for helper_bin in caddy ttyd asd-tunnel; do
+      if [[ -f "$bin_dir/$helper_bin" ]]; then
+        cp -f "$bin_dir/$helper_bin" "$asd_bin_dir/$helper_bin"
+        chmod +x "$asd_bin_dir/$helper_bin" 2>/dev/null || true
+        info "Installed $helper_bin to $asd_bin_dir/"
+      fi
+    done
   fi
 
   # Install assets to global ASD home (must match CLI's getAsdHome() logic)

@@ -6,7 +6,6 @@ Run ASD CLI on Android devices using [Termux](https://termux.dev/).
 
 - Android device (ARM64)
 - Termux app from [F-Droid](https://f-droid.org/packages/com.termux/) (recommended)
-- Node.js (`pkg install nodejs-lts`)
 
 > **Note:** The Google Play version of Termux may be outdated. F-Droid is recommended.
 
@@ -27,23 +26,47 @@ pkg update && pkg upgrade -y
 **Option A: Install script** (recommended)
 
 ```bash
-pkg install nodejs-lts curl
+pkg install curl clang
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
-The installer auto-detects Termux via `$TERMUX_VERSION` and downloads the correct Termux-native build. No Bun required.
+The installer auto-detects Termux via `$TERMUX_VERSION`, downloads the Termux-native build, and auto-installs Bun via the bundled `install-bun.sh` script (compiles a small ELF loader from C).
 
-**Option B: Via Bun** (for development)
+**Option B: Manual Bun install + install script**
 
 ```bash
-pkg install bun git
-# Clone your project with ASD submodule
+# Install Bun first (via ELF loader)
+just android-bun-install
+# Then install ASD
+curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
+```
+
+**Option C: Via Bun** (for development)
+
+```bash
+just android-bun-install  # Install Bun via ELF loader
 git clone --recursive https://github.com/your/project.git
 cd your-project
 bun install
 ```
 
-> **Note:** Option A uses the same `install.sh` as all other platforms — it auto-detects Termux and downloads a pre-bundled Node.js script instead of the standard compiled binary. Option B requires Bun and downloads dependencies via `bun install`.
+> **Note:** ASD CLI on Termux runs under real Bun via a userland ELF loader (`bun_loader`). The installer automatically sets this up. See [BUN_TERMUX_LOADER.md](./BUN_TERMUX_LOADER.md) for details.
+
+### 3.1 Install Codex CLI (Termux)
+
+Use this if you want the Termux-specific Codex CLI package:
+
+```bash
+pkg update && pkg upgrade -y
+pkg install nodejs-lts -y
+
+npm -g uninstall @openai/codex || true
+npm -g install @mmmbuto/codex-cli-termux
+
+codex --version
+codex login
+codex
+```
 
 ### 4. Initialize
 
@@ -55,13 +78,15 @@ asd net
 
 ## How the Termux Build Works
 
-The standard `asd` binary is compiled with Bun (`bun build --compile`) which produces Linux ELF binaries incompatible with Android. The Termux build instead produces a **single Node.js script** with:
+The standard `asd` binary is compiled with Bun (`bun build --compile`) which produces glibc-linked, non-PIE Linux ELF binaries incompatible with Android's Bionic linker. The Termux build instead:
 
-1. A Termux Node.js shebang (`#!/data/data/com.termux/files/usr/bin/node`)
-2. A Bun API polyfill (implements `Bun.spawn`, `Bun.file`, `Bun.serve`, etc. using Node.js APIs)
-3. All CLI code and dependencies bundled into one file
+1. Bundles all CLI code into a single JS file (`asd-bundle.js`) via `bun build --target=bun`
+2. Runs it under **real Bun** via a userland ELF loader (`bun_loader`)
+3. A thin wrapper script (`bin/asd`) ties it together: `bun_loader → bun.real → asd-bundle.js`
 
-This runs natively under Termux's Node.js without needing Bun installed.
+The ELF loader intercepts Bun's `execve` calls and redirects the dynamic linker from `/lib/ld-linux-aarch64.so.1` to Bun's bundled `ld-linux` in `~/.bun/lib/`. This lets the unmodified Bun binary run on Android without any API polyfills or bundle patching.
+
+See [BUN_TERMUX_LOADER.md](./BUN_TERMUX_LOADER.md) for technical details on the ELF loader.
 
 ## Termux-Specific Notes
 
@@ -130,16 +155,21 @@ Termux may need wake lock for background connections:
 termux-wake-lock
 ```
 
-### Node.js version
+### Bun not installed
 
-The Termux build requires Node.js 22+. Check your version:
+If you see "Error: Bun is not installed", run:
 ```bash
-node --version
+just android-bun-install
 ```
 
-If outdated:
+Or manually run the bundled installer:
 ```bash
-pkg install nodejs-lts
+bash ~/.local/share/asd/scripts/install-bun.sh
+```
+
+This requires `clang` (for compiling the ELF loader):
+```bash
+pkg install clang
 ```
 
 ---

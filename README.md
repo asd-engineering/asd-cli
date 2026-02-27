@@ -99,17 +99,18 @@ Get a public URL in seconds.
 curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
 ```
 
+**Windows CMD (recommended):**
+
+```cmd
+curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.cmd -o %TEMP%\install.cmd && %TEMP%\install.cmd
+```
+
 **Windows PowerShell:**
+
+> **Note:** The `irm | iex` pattern may be blocked by Windows Defender (AMSI). If so, use the CMD method above.
 
 ```powershell
 irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex
-```
-
-**Windows CMD:**
-
-```cmd
-curl -fsSL -o %TEMP%\install.ps1 https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1
-powershell -ExecutionPolicy Bypass -File %TEMP%\install.ps1
 ```
 
 **Self-update** (all platforms):
