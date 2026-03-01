@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# ASD CLI Installer - Always installs latest version
+# ASD CLI Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash
-# Or with custom install dir: curl -fsSL ... | INSTALL_DIR=/usr/local/bin bash
 #
-# This script will:
-# 1. Auto-detect your OS and architecture
-# 2. Download the latest ASD CLI binary
-# 3. Install to ~/.local/bin (or custom INSTALL_DIR)
-# 4. Remind you to add to PATH if needed
+# Options (via environment variables):
+#   INSTALL_DIR  - Custom install directory (default: ~/.local/bin)
+#   VERSION      - Install a specific version tag (e.g. VERSION=v2.1.8-beta.1)
+#                  Set VERSION=list to show available releases
+#
+# Examples:
+#   curl -fsSL https://asd.host/install.sh | bash                              # Latest
+#   curl -fsSL https://asd.host/install.sh | VERSION=v2.1.8-beta.1 bash        # Specific version
+#   curl -fsSL https://asd.host/install.sh | VERSION=list bash                 # List versions
 #
 # After installation, update with: asd update
 
@@ -18,6 +21,7 @@ REPO="asd-engineering/asd-cli"
 # Fallback to private repo if public doesn't have releases yet
 FALLBACK_REPO="asd-engineering/.asd"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+VERSION="${VERSION:-}"
 
 # Colors
 RED='\033[0;31m'
@@ -72,30 +76,100 @@ detect_platform() {
     return
   fi
 
-  local result="${os}-${arch}"
-
-  # Linux x64: check if CPU supports AVX2 instructions
-  # Bun's default x64 binary requires AVX2 (Haswell/2013+ CPUs).
-  # Older CPUs without AVX2 will segfault. Use the baseline build (SSE4.2/Nehalem).
-  if [[ "$result" == "linux-x64" ]]; then
-    if [[ -f /proc/cpuinfo ]] && ! grep -q ' avx2 ' /proc/cpuinfo 2>/dev/null; then
-      # warn to stderr — this function returns via stdout echo
-      warn "CPU does not support AVX2 instructions. Using baseline (compatible) build." >&2
-      warn "Consider upgrading to a newer CPU for better performance." >&2
-      result="linux-x64-baseline"
-    fi
-  fi
-
-  echo "$result"
+  echo "${os}-${arch}"
 }
 
-# Get latest release tag using GitHub API
-# Tries public repo first, falls back to private repo
-get_latest_version() {
+# List available releases from GitHub
+list_versions() {
   local repos=("${REPO}" "${FALLBACK_REPO}")
   local auth_header=""
 
-  # Use GITHUB_TOKEN if available (for private repos)
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
+  elif [[ -n "${GH_TOKEN:-}" ]]; then
+    auth_header="Authorization: Bearer ${GH_TOKEN}"
+  fi
+
+  for repo in "${repos[@]}"; do
+    local api_url="https://api.github.com/repos/${repo}/releases?per_page=20"
+    local response
+
+    if [[ -n "$auth_header" ]]; then
+      response=$(curl -fsSL -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || continue
+    else
+      response=$(curl -fsSL -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || continue
+    fi
+
+    local tags
+    tags=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+
+    if [[ -n "$tags" ]]; then
+      echo ""
+      info "Available versions (from $repo):"
+      echo ""
+      local first=true
+      local example_tag=""
+      while IFS= read -r tag; do
+        if $first; then
+          echo "  $tag  (latest)"
+          first=false
+        else
+          echo "  $tag"
+          [[ -z "$example_tag" ]] && example_tag="$tag"
+        fi
+      done <<< "$tags"
+      echo ""
+      info "Install a specific version:"
+      echo "  curl -fsSL https://asd.host/install.sh | VERSION=${example_tag:-$tag} bash"
+      echo ""
+      return 0
+    fi
+  done
+
+  error "Failed to fetch releases. Check your internet connection."
+}
+
+# Get release tag — uses VERSION env var if set, otherwise fetches latest
+# Tries public repo first, falls back to private repo
+get_version() {
+  # If VERSION is explicitly set, validate it exists and use it
+  if [[ -n "$VERSION" ]]; then
+    # Ensure it starts with 'v'
+    [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
+
+    local repos=("${REPO}" "${FALLBACK_REPO}")
+    local auth_header=""
+
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+      auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
+    elif [[ -n "${GH_TOKEN:-}" ]]; then
+      auth_header="Authorization: Bearer ${GH_TOKEN}"
+    fi
+
+    for repo in "${repos[@]}"; do
+      local api_url="https://api.github.com/repos/${repo}/releases/tags/${VERSION}"
+      local response http_code
+
+      if [[ -n "$auth_header" ]]; then
+        http_code=$(curl -fsSL -o /dev/null -w '%{http_code}' -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || continue
+      else
+        http_code=$(curl -fsSL -o /dev/null -w '%{http_code}' -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || continue
+      fi
+
+      if [[ "$http_code" == "200" ]]; then
+        ACTIVE_REPO="$repo"
+        echo "$VERSION"
+        return 0
+      fi
+    done
+
+    error "Version $VERSION not found. Use VERSION=list to see available versions."
+  fi
+
+  # No VERSION set — fetch latest
+  local repos=("${REPO}" "${FALLBACK_REPO}")
+  local auth_header=""
+
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
   elif [[ -n "${GH_TOKEN:-}" ]]; then
@@ -116,7 +190,6 @@ get_latest_version() {
     tag=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -n "$tag" ]]; then
-      # Export the repo that worked for download URL construction
       ACTIVE_REPO="$repo"
       echo "$tag"
       return 0
@@ -128,17 +201,23 @@ get_latest_version() {
 
 # Download and install
 install_asd() {
+  # Handle VERSION=list
+  if [[ "$VERSION" == "list" ]]; then
+    list_versions
+    exit 0
+  fi
+
   local platform version download_url archive_name tmp_dir
 
   platform=$(detect_platform)
   info "Detected platform: $platform"
 
-  # Termux: install required packages and verify Node.js
+  # Termux: install required packages
   if [[ "$platform" == "termux-arm64" ]]; then
     info "Installing Termux dependencies..."
     local termux_pkgs=()
 
-    # Core requirement
+    # Core requirement — Termux builds run under Node.js
     command -v node &>/dev/null || termux_pkgs+=(nodejs-lts)
 
     # Helper binaries (not in CI tarball)
@@ -156,11 +235,15 @@ install_asd() {
     info "Node.js: $(node --version)"
   fi
 
-  # Initialize ACTIVE_REPO (will be set by get_latest_version)
+  # Initialize ACTIVE_REPO (will be set by get_version)
   ACTIVE_REPO=""
-  version=$(get_latest_version)
-  [[ -z "$version" ]] && error "Could not determine latest version"
-  info "Latest version: $version"
+  version=$(get_version)
+  [[ -z "$version" ]] && error "Could not determine version"
+  if [[ -n "$VERSION" ]]; then
+    info "Requested version: $version"
+  else
+    info "Latest version: $version"
+  fi
   info "Source: ${ACTIVE_REPO:-$REPO}"
 
   # Construct download URL using the repo that had releases
@@ -192,7 +275,7 @@ install_asd() {
     if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" 2>/dev/null; then
       if [[ "$repo_for_download" == "$REPO" ]]; then
         error "Download failed. Binary may not be available for '${platform}'.
-Available platforms: linux-x64, linux-x64-baseline, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
+Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
 See https://github.com/asd-engineering/asd-cli/releases"
       else
         error "Download failed. For private repos, set GITHUB_TOKEN."
@@ -201,12 +284,6 @@ See https://github.com/asd-engineering/asd-cli/releases"
   fi
 
   info "Extracting to $INSTALL_DIR..."
-
-  # Remove stale symlinks in INSTALL_DIR (e.g., leftover from previous installs pointing to deleted targets)
-  for f in "$INSTALL_DIR"/asd "$INSTALL_DIR"/bun "$INSTALL_DIR"/asd-tunnel; do
-    [[ -L "$f" && ! -e "$f" ]] && rm -f "$f"
-  done
-
   if [[ "$archive_name" == *.zip ]]; then
     unzip -q -o "$tmp_dir/$archive_name" -d "$tmp_dir/extracted"
     # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
@@ -234,8 +311,7 @@ See https://github.com/asd-engineering/asd-cli/releases"
       info "Installed bundled code-server to: $asd_home_cs/code-server"
     fi
 
-    # Copy bundled helper binaries (caddy, ttyd) to ASD global bin dir
-    # so the CLI binary installer finds them at ~/.local/share/asd/bin/
+    # Copy bundled helper binaries to ASD global bin dir
     local asd_bin_dir
     asd_bin_dir="$(get_asd_home)/bin"
     mkdir -p "$asd_bin_dir"
@@ -275,6 +351,13 @@ See https://github.com/asd-engineering/asd-cli/releases"
     rm -rf "$asd_home/modules"
     cp -r "$modules_dir" "$asd_home/modules"
     info "Modules installed to $asd_home/modules/"
+  fi
+
+  # Termux: verify Node.js is available (Termux builds run under Node.js, not Bun)
+  if [[ "$platform" == "termux-arm64" ]]; then
+    if ! command -v node &>/dev/null; then
+      warn "Node.js is required but not installed. Install with: pkg install nodejs-lts"
+    fi
   fi
 
   # Make executable
