@@ -76,7 +76,21 @@ detect_platform() {
     return
   fi
 
-  echo "${os}-${arch}"
+  local result="${os}-${arch}"
+
+  # Linux x64: check if CPU supports AVX2 instructions
+  # Bun's default x64 binary requires AVX2 (Haswell/2013+ CPUs).
+  # Older CPUs without AVX2 will segfault. Use the baseline build (SSE4.2/Nehalem).
+  if [[ "$result" == "linux-x64" ]]; then
+    if [[ -f /proc/cpuinfo ]] && ! grep -q ' avx2 ' /proc/cpuinfo 2>/dev/null; then
+      # warn to stderr — this function returns via stdout echo
+      warn "CPU does not support AVX2 instructions. Using baseline (compatible) build." >&2
+      warn "Consider upgrading to a newer CPU for better performance." >&2
+      result="linux-x64-baseline"
+    fi
+  fi
+
+  echo "$result"
 }
 
 # List available releases from GitHub
@@ -286,16 +300,16 @@ See https://github.com/asd-engineering/asd-cli/releases"
   info "Extracting to $INSTALL_DIR..."
   if [[ "$archive_name" == *.zip ]]; then
     unzip -q -o "$tmp_dir/$archive_name" -d "$tmp_dir/extracted"
-    # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
+    # Find top-level bin directory (exclude code-server/node_modules nested bin dirs)
     local bin_dir
-    bin_dir=$(find "$tmp_dir/extracted" -type d -name "bin" | head -1)
+    bin_dir=$(find "$tmp_dir/extracted" -maxdepth 3 -type d -name "bin" ! -path "*/code-server/*" ! -path "*/node_modules/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
     cp -f "$bin_dir/"* "$INSTALL_DIR/"
   else
     tar -xzf "$tmp_dir/$archive_name" -C "$tmp_dir"
-    # Find bin directory (may be at root or inside a subdirectory like asd-linux-x64/)
+    # Find top-level bin directory (exclude code-server/node_modules nested bin dirs)
     local bin_dir
-    bin_dir=$(find "$tmp_dir" -type d -name "bin" ! -path "$INSTALL_DIR/*" | head -1)
+    bin_dir=$(find "$tmp_dir" -maxdepth 2 -type d -name "bin" ! -path "*/code-server/*" ! -path "*/node_modules/*" ! -path "$INSTALL_DIR/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
     cp -f "$bin_dir/"* "$INSTALL_DIR/"
 
@@ -360,13 +374,21 @@ See https://github.com/asd-engineering/asd-cli/releases"
     fi
   fi
 
-  # Make executable
-  chmod +x "$INSTALL_DIR/asd" 2>/dev/null || true
+  # Deduplicate: move asd binary to ASD_HOME/bin/ and symlink from INSTALL_DIR
+  # This ensures `asd update` and `just global-install` always update the same file
+  local asd_bin_home
+  asd_bin_home="$(get_asd_home)/bin"
+  mkdir -p "$asd_bin_home"
+  if [[ -f "$INSTALL_DIR/asd" && ! -L "$INSTALL_DIR/asd" ]]; then
+    mv -f "$INSTALL_DIR/asd" "$asd_bin_home/asd"
+    chmod +x "$asd_bin_home/asd"
+    ln -sf "$asd_bin_home/asd" "$INSTALL_DIR/asd"
+  fi
 
   # Verify installation
   if [[ -x "$INSTALL_DIR/asd" ]]; then
     info "✅ ASD CLI installed successfully!"
-    info "   Location: $INSTALL_DIR/asd"
+    info "   Location: $asd_bin_home/asd (symlinked from $INSTALL_DIR/asd)"
     info "   Version: $("$INSTALL_DIR/asd" --version 2>/dev/null || echo "$version")"
     echo ""
     info "To update in the future, run:"
