@@ -278,22 +278,62 @@ install_asd() {
 
   info "Downloading $archive_name..."
 
-  # Add auth header for private repos
-  local curl_opts="-fsSL"
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    curl_opts="$curl_opts -H \"Authorization: Bearer ${GITHUB_TOKEN}\""
-    curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" "$download_url" -o "$tmp_dir/$archive_name" || error "Download failed"
-  elif [[ -n "${GH_TOKEN:-}" ]]; then
-    curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/octet-stream" "$download_url" -o "$tmp_dir/$archive_name" || error "Download failed"
-  else
-    if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name" 2>/dev/null; then
-      if [[ "$repo_for_download" == "$REPO" ]]; then
-        error "Download failed. Binary may not be available for '${platform}'.
+  # Helper: download with optional auth
+  _download() {
+    local url="$1" dest="$2"
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+      curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" "$url" -o "$dest" 2>/dev/null
+    elif [[ -n "${GH_TOKEN:-}" ]]; then
+      curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/octet-stream" "$url" -o "$dest" 2>/dev/null
+    else
+      curl -fsSL "$url" -o "$dest" 2>/dev/null
+    fi
+  }
+
+  if ! _download "$download_url" "$tmp_dir/$archive_name"; then
+    if [[ "$platform" == "termux-arm64" ]]; then
+      # Termux asset may be missing if phone was offline during release.
+      # Search previous releases for the most recent one that has it.
+      warn "Termux package not available in $version — searching previous releases..."
+      local found_version=""
+      local auth_header=""
+      [[ -n "${GITHUB_TOKEN:-}" ]] && auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
+      [[ -n "${GH_TOKEN:-}" ]] && auth_header="Authorization: Bearer ${GH_TOKEN}"
+
+      local api_url="https://api.github.com/repos/${repo_for_download}/releases?per_page=10"
+      local releases_json
+      if [[ -n "$auth_header" ]]; then
+        releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || releases_json=""
+      else
+        releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || releases_json=""
+      fi
+
+      if [[ -n "$releases_json" ]]; then
+        # Parse release tags and check each for the termux asset
+        local tags
+        tags=$(echo "$releases_json" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+        while IFS= read -r prev_tag; do
+          [[ -z "$prev_tag" || "$prev_tag" == "$version" ]] && continue
+          local prev_url="https://github.com/${repo_for_download}/releases/download/${prev_tag}/${archive_name}"
+          if _download "$prev_url" "$tmp_dir/$archive_name"; then
+            found_version="$prev_tag"
+            warn "Using Termux package from $found_version (latest available)"
+            break
+          fi
+        done <<< "$tags"
+      fi
+
+      if [[ -z "$found_version" ]]; then
+        error "No Termux package found in any recent release.
+The phone build service may have been offline. Try again later or install manually.
+See https://github.com/asd-engineering/asd-cli/releases"
+      fi
+    elif [[ "$repo_for_download" == "$REPO" ]]; then
+      error "Download failed. Binary may not be available for '${platform}'.
 Available platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64, termux-arm64.
 See https://github.com/asd-engineering/asd-cli/releases"
-      else
-        error "Download failed. For private repos, set GITHUB_TOKEN."
-      fi
+    else
+      error "Download failed. For private repos, set GITHUB_TOKEN."
     fi
   fi
 
@@ -383,6 +423,12 @@ See https://github.com/asd-engineering/asd-cli/releases"
     mv -f "$INSTALL_DIR/asd" "$asd_bin_home/asd"
     chmod +x "$asd_bin_home/asd"
     ln -sf "$asd_bin_home/asd" "$INSTALL_DIR/asd"
+    # Termux: move runtime files alongside the wrapper (it resolves symlinks to find them)
+    for runtime_file in asd-bundle.js asd-node.js; do
+      if [[ -f "$INSTALL_DIR/$runtime_file" ]]; then
+        mv -f "$INSTALL_DIR/$runtime_file" "$asd_bin_home/$runtime_file"
+      fi
+    done
   fi
 
   # Verify installation
