@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.6.0 | **Last Updated:** 2026-02-25 | **Status:** ACTIVE
+**Version:** 1.8.0 | **Last Updated:** 2026-03-06 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 
@@ -41,7 +41,9 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `asd expose <port>` | 🟢 | Quick one-command exposure, Caddy + tunnel |
-| `asd auth status` | 🟡 | Credential status check |
+| `asd login` / `asd login key` | 🟢 | OAuth and API key authentication |
+| `asd auth status/whoami/export` | 🟡 | Credential management and Docker export |
+| `asd init --key` | 🟡 | Import existing SSH key into registry |
 | `asd net expose start/stop` | 🟢 | Per-service tunnel control |
 | Public tunnels | 🟢 | Subdomain-based URLs via asd-tunnel binary |
 | Tunnel modes (caddy/direct) | 🟡 | Mode switching works, limited testing |
@@ -94,6 +96,22 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Plan-based quotas | 🟠 | Free: 0, Developer: 10, Pro: 50, Scale: 200 |
 
 > **Alpha:** Ready for testing. Requires `asd login` for authentication. API and CLI flags may change between releases.
+
+---
+
+## Docker Containers
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `asd sandbox` CLI | 🟢 | Session management (create, attach, resume, stop, remove) |
+| Sandbox autostart mode | 🟢 | Starts Caddy + ttyd + net apply, drops into interactive menu |
+| Sandbox interactive menu | 🟢 | System info, tunnel status, tools menu (asd net, claude, bash, expose) |
+| Sandbox expose on startup | 🟢 | `autostart expose <port>` provisions tunnel automatically |
+| Sandbox tmux persistence | 🟢 | Detach/reattach preserves services and session state |
+| Tunnel scratch container | 🟢 | ~20 MB, statically compiled, no OS/shell, CI-ready |
+| Claude Code in sandbox | 🟢 | Pre-installed, usable from menu or directly |
+
+> **Stable:** Full sandbox and tunnel containers published to IONOS registry. See [um_docker.md](./um_docker.md).
 
 ---
 
@@ -172,6 +190,13 @@ Features progress through maturity levels as they gain:
 ---
 
 ## Changelog
+
+### v1.8.0 (2026-03-06)
+
+- Added Docker Containers section with sandbox and tunnel features (🟢 Stable)
+- ASD Sandbox: interactive menu, autostart, expose-on-startup, tmux session management
+- ASD Tunnel: lightweight scratch container (~20 MB) for CI/CD automation
+- New user documentation: [um_docker.md](./um_docker.md)
 
 ### v1.7.0 (2026-02-25)
 

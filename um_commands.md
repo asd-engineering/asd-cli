@@ -1,6 +1,6 @@
 # ASD CLI Command Reference
 
-**Version:** 2.2.0 | **Last Updated:** 2026-02-25
+**Version:** 2.3.0 | **Last Updated:** 2026-03-06
 
 Complete reference for all ASD CLI commands.
 
@@ -13,7 +13,13 @@ Complete reference for all ASD CLI commands.
 | `asd init` | Initialize project workspace |
 | `asd run <task>` | Run automation task from asd.yaml |
 | `asd expose <port>` | Expose a port with tunnel |
-| `asd login` | Login for tunnels (coming soon) |
+| `asd login` | Login via OAuth |
+| `asd login key` | Login with API key (CI/headless) |
+| `asd logout` | Sign out |
+| `asd auth status` | Show auth status |
+| `asd auth whoami` | Show current user |
+| `asd auth export` | Export SSH key as env vars |
+| `asd auth credentials` | Show all credential sources |
 | `asd net` | Open network TUI |
 | `asd terminal` | Web terminal management |
 | `asd code` | VS Code server management |
@@ -103,11 +109,49 @@ automation:
 
 ### `asd login`
 
-> **Coming soon:** CLI-based login will be available in the next release.
+Login to ASD platform via OAuth. Opens a browser for authentication.
 
-For now, get tunnel credentials via:
-- **Quick testing:** `curl -X POST https://asd.engineer/functions/v1/create-ephemeral-token`
-- **CI/CD:** Create tunnel token at [asd.host](https://asd.host) → Account → Tunnel Tokens
+```bash
+asd login              # Interactive OAuth login
+```
+
+After login, tunnel credentials are automatically saved and all `asd expose` / `asd net apply --tunnel` commands work.
+
+### `asd login key`
+
+Login with an API key for headless/CI environments where no browser is available.
+
+```bash
+asd login key <api-key>          # Pass key directly
+asd login key                    # Interactive prompt (TTY only)
+```
+
+The API key can also be provided via `ASD_API_KEY` environment variable.
+
+### `asd logout`
+
+Sign out and clear local credentials.
+
+```bash
+asd logout
+```
+
+### `asd init --key`
+
+Import an existing SSH key file into the credential registry.
+
+```bash
+asd init --key /path/to/private_key                    # Auto-detect key_id from server
+asd init --key /path/to/private_key --key-id <uuid>    # Explicit key_id (works offline)
+asd init --key /path/to/private_key --server eu1       # Specify server
+```
+
+**What it does:**
+1. Validates the SSH key file
+2. Computes the key fingerprint
+3. If `--key-id` is not provided, queries the server to find the matching key
+4. Copies the key to `~/.config/asd/tunnel/keys/`
+5. Adds the key to the credential registry
 
 ### `asd update`
 
@@ -429,6 +473,64 @@ Show current authentication status.
 asd auth status
 ```
 
+### `asd auth whoami`
+
+Show current user info (email, client ID, org ID, token expiry).
+
+```bash
+asd auth whoami
+```
+
+### `asd auth credentials`
+
+Show all credential sources and their status.
+
+```bash
+asd auth credentials
+```
+
+### `asd auth refresh`
+
+Refresh the authentication token.
+
+```bash
+asd auth refresh
+```
+
+### `asd auth export`
+
+Export SSH key credentials as environment variables for use in Docker or CI.
+
+```bash
+asd auth export              # Shell export format
+asd auth export --docker     # Docker -e flag format
+```
+
+**Shell format output:**
+```bash
+export ASD_TUNNEL_KEY="<base64-private-key>"
+export ASD_TUNNEL_KEY_ID="<key-uuid>"
+export ASD_TUNNEL_HOST="tunnel.asd.sh"
+export ASD_TUNNEL_PORT="2222"
+```
+
+**Docker format output:**
+```bash
+-e ASD_TUNNEL_KEY="<base64-private-key>" \
+-e ASD_TUNNEL_KEY_ID="<key-uuid>" \
+-e ASD_TUNNEL_HOST="tunnel.asd.sh" \
+-e ASD_TUNNEL_PORT="2222"
+```
+
+**Usage examples:**
+```bash
+# Set env vars in current shell
+eval $(asd auth export)
+
+# Pass to Docker
+docker run $(asd auth export --docker) my-image asd expose 3000
+```
+
 > **Tip:** Use `asd login` to authenticate, `asd auth credentials` to view all credentials.
 
 ---
@@ -692,6 +794,18 @@ Key environment variables for ASD:
 | `ASD_VERBOSE=1` | Enable verbose output |
 | `ASD_BIN_LOCATION` | Binary storage: `global` or `workspace` |
 
+**Tunnel authentication:**
+
+| Variable | Description |
+|----------|-------------|
+| `ASD_API_KEY` | API key for headless login (`asd login key`) |
+| `ASD_TUNNEL_TOKEN` | Tunnel token (from dashboard) |
+| `ASD_TUNNEL_USER` | Tunnel username |
+| `ASD_TUNNEL_KEY` | Base64-encoded SSH private key (for Docker/CI) |
+| `ASD_TUNNEL_KEY_ID` | SSH key UUID (required with `ASD_TUNNEL_KEY`) |
+| `ASD_TUNNEL_HOST` | Tunnel server hostname (optional, auto-detected) |
+| `ASD_TUNNEL_PORT` | Tunnel server SSH port (optional, default 2222) |
+
 **Service credentials:**
 
 | Service | Variables |
@@ -718,7 +832,8 @@ Key environment variables for ASD:
 | `asd net` | ✅ |
 | `asd net apply` | ✅ |
 | `asd expose` | 🟢 |
-| `asd login` / `asd auth status` | 🟢 |
+| `asd login` / `asd login key` | 🟢 |
+| `asd auth status/whoami/export` | 🟢 |
 | `asd terminal` | 🟢 |
 | `asd code` | 🟢 |
 | `asd database` | 🟢 |

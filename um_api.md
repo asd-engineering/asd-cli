@@ -1,6 +1,6 @@
 # ASD API Reference
 
-**Version:** 2.0.2 | **Last Updated:** 2026-02-03
+**Version:** 2.1.0 | **Last Updated:** 2026-03-06
 
 Programmatic access to ASD tunnel services.
 
@@ -8,7 +8,50 @@ Programmatic access to ASD tunnel services.
 
 ## Authentication Methods
 
-### Method 1: Ephemeral Token (Quick Testing)
+### Method 1: CLI Login (Interactive)
+
+Login via OAuth from the command line:
+
+```bash
+asd login           # Opens browser for OAuth
+asd login key <key> # API key login (headless/CI)
+```
+
+After login, all tunnel commands work automatically.
+
+### Method 2: SSH Key (Docker & Containers)
+
+Use your existing SSH key in Docker containers or new environments.
+
+**Volume mount:**
+```bash
+docker run -v ~/.config/asd/tunnel:/root/.config/asd/tunnel:ro my-image
+```
+
+**Environment variables:**
+```bash
+# Export credentials from host
+eval $(asd auth export)
+
+# Pass to Docker
+docker run \
+  -e ASD_TUNNEL_KEY="$ASD_TUNNEL_KEY" \
+  -e ASD_TUNNEL_KEY_ID="$ASD_TUNNEL_KEY_ID" \
+  -e ASD_TUNNEL_HOST="$ASD_TUNNEL_HOST" \
+  -e ASD_TUNNEL_PORT="$ASD_TUNNEL_PORT" \
+  my-image asd expose 3000
+
+# Or use the Docker flag format
+docker run $(asd auth export --docker) my-image asd expose 3000
+```
+
+**Import existing key:**
+```bash
+asd init --key /path/to/private_key                 # Auto-detect key_id
+asd init --key /path/to/private_key --key-id <uuid> # Explicit key_id
+```
+
+### Method 3: Ephemeral Token (Quick Testing)
 
 Get 5-minute credentials instantly. **No account required.**
 
@@ -38,7 +81,7 @@ export ASD_TUNNEL_USER="guest-xyz123"
 asd expose 3000
 ```
 
-### Method 2: Tunnel Token (CI/CD & Longer Sessions)
+### Method 4: Tunnel Token (CI/CD & Longer Sessions)
 
 For automation and longer-running tunnels:
 
@@ -108,16 +151,28 @@ Content-Type: application/json
 
 ## Environment Variables
 
+**Credential resolution (priority order — first match wins):**
+
+| Priority | Variables | Description |
+|----------|-----------|-------------|
+| 1 | `ASD_TUNNEL_TOKEN` + `ASD_TUNNEL_USER` | Token auth (CI/CD, dashboard tokens) |
+| 2 | `ASD_TUNNEL_KEY` + `ASD_TUNNEL_KEY_ID` | SSH key via env var (Docker, containers) |
+| 3 | *OAuth credentials* | Stored in `~/.config/asd/tunnel/` after `asd login` |
+| 4 | *Credential registry* | SSH keys/tokens from `asd login key` or `asd init --key` |
+| 5 | `ASD_CLIENT_ID` + `ASD_CLIENT_SECRET` | Ephemeral tokens (quick testing) |
+
+**Login (not part of credential resolution):**
+
 | Variable | Description |
 |----------|-------------|
-| `ASD_TUNNEL_TOKEN` | Tunnel authentication token |
-| `ASD_TUNNEL_USER` | Tunnel username |
-| `ASD_TUNNEL_HOST` | Server hostname (optional, auto-detected) |
-| `ASD_TUNNEL_PORT` | Server SSH port (optional, default 2223) |
+| `ASD_API_KEY` | API key for `asd login key` command |
 
----
+**Connection (optional, auto-detected):**
 
-> **Note:** CLI-based login (`asd login`) is coming in the next release.
+| Variable | Description |
+|----------|-------------|
+| `ASD_TUNNEL_HOST` | Server hostname |
+| `ASD_TUNNEL_PORT` | Server SSH port (default 2222) |
 
 ---
 

@@ -1,6 +1,6 @@
 # ASD CLI User Manual
 
-**Version:** 2.1.7 | **Last Updated:** 2026-02-19
+**Version:** 2.2.0 | **Last Updated:** 2026-03-06
 
 Share local services over HTTPS with anyone, anywhere. No port forwarding, no firewall rules, no certificates to manage.
 
@@ -22,6 +22,7 @@ Share local services over HTTPS with anyone, anywhere. No port forwarding, no fi
 12. [Plugins & Extensibility](#12-plugins--extensibility)
 13. [Resources & Community](#13-resources--community)
 14. [Vault — Secret Management](#14-vault--secret-management)
+15. [Docker Containers](#15-docker-containers)
 
 ---
 
@@ -859,11 +860,106 @@ ASD_CODESERVER_AUTH=password
 ASD_CODESERVER_PASSWORD=your-code-password
 ```
 
-### Level 3: Tunnel Tokens (Automation)
+### Level 3: CLI Login & Tunnel Credentials
 
-For CI/CD pipelines and automation, use tunnel tokens from the web dashboard.
+ASD provides multiple authentication methods for tunnel access. Choose based on your environment:
 
-**Method 1: Ephemeral Token (Quick Testing)**
+| Method | Best For | Account Required |
+|--------|----------|-----------------|
+| `asd login` | Interactive (laptop, desktop) | Yes |
+| `asd login key` | CI/CD, headless servers | Yes (API key) |
+| SSH key import | Docker, new machines | No (existing key) |
+| Ephemeral token | Quick testing (5 min) | No |
+| Tunnel token | Dashboard-created token | Yes |
+
+#### Method 1: Interactive Login (`asd login`)
+
+The simplest way to authenticate. Opens a browser for OAuth:
+
+```bash
+asd login
+# Opens browser → sign in → credentials saved automatically
+```
+
+After login, all tunnel commands (`asd expose`, `asd net apply --tunnel`) work automatically.
+
+```bash
+asd auth status     # Check if logged in
+asd auth whoami     # Show current user info
+asd logout          # Sign out
+```
+
+#### Method 2: API Key Login (`asd login key`)
+
+For headless environments (CI/CD, servers) where no browser is available:
+
+```bash
+# Pass key directly
+asd login key sk_your_api_key_here
+
+# Or via environment variable
+export ASD_API_KEY=sk_your_api_key_here
+asd login key
+
+# Interactive prompt (when running in a terminal)
+asd login key
+# Enter API key: _
+```
+
+Get your API key from [asd.host](https://asd.host) → Account → API Keys.
+
+#### Method 3: SSH Key in Docker & Containers
+
+Three ways to use your SSH key credentials inside Docker containers:
+
+**Option A: Volume mount (simplest)**
+
+Mount your credential directory into the container:
+
+```bash
+docker run -v ~/.config/asd/tunnel:/root/.config/asd/tunnel:ro my-image
+# Inside container: asd expose 3000  ← just works
+```
+
+ASD automatically resolves key paths even when the host path differs from the container path.
+
+**Option B: Environment variables**
+
+Pass SSH key content as env vars — no file mounting needed:
+
+```bash
+# Export credentials (convenience command)
+eval $(asd auth export)
+
+# Or with Docker flags
+docker run \
+  $(asd auth export --docker) \
+  my-image asd expose 3000
+```
+
+The `asd auth export` command outputs:
+```bash
+export ASD_TUNNEL_KEY="<base64-encoded-private-key>"
+export ASD_TUNNEL_KEY_ID="<key-uuid>"
+export ASD_TUNNEL_HOST="tunnel.asd.sh"
+export ASD_TUNNEL_PORT="2222"
+```
+
+Use `--docker` for Docker `-e` flag format instead of shell exports.
+
+**Option C: Import existing key**
+
+If you have a copy of your SSH key file (e.g., copied to a server):
+
+```bash
+# Auto-detect key_id from server (requires network)
+asd init --key /path/to/private_key
+
+# Or specify key_id explicitly (works offline)
+asd init --key /path/to/private_key --key-id abc-123-def
+```
+
+#### Method 4: Ephemeral Token (Quick Testing)
 
 No account needed. Get 5-minute credentials instantly:
 
@@ -876,7 +972,7 @@ curl -X POST https://asd.engineer/functions/v1/create-ephemeral-token
 # - expires_at: 5 minutes from now
 ```
 
-**Method 2: Tunnel Token (CI/CD & Longer Sessions)**
+#### Method 5: Tunnel Token (Dashboard)
 
 1. Sign up at [asd.host](https://asd.host)
 2. Go to Account → Tunnel Tokens → Create
@@ -888,8 +984,6 @@ ASD_TUNNEL_USER=your-user-id
 asd expose 3000
 ```
 
-> **Note:** CLI-based login (`asd login`) is coming in the next release.
-
 ### Choosing the Right Level
 
 | Scenario | Recommended |
@@ -898,7 +992,8 @@ asd expose 3000
 | Quick demo (< 1 hour) | No auth (URL is secret enough) |
 | Remote access to your machine | Basic password |
 | Sharing with teammates | Basic password |
-| CI/CD pipelines | Tunnel tokens |
+| CI/CD pipelines | `asd login key` or SSH key env vars |
+| Docker containers | Volume mount or `asd auth export` |
 | Production | Don't use ASD tunnels! |
 
 ### Password Best Practices
@@ -1671,6 +1766,60 @@ Manage secrets at `/workspace/vault/` in the admin dashboard. The web UI shows s
 ### Security
 
 Secrets are encrypted at rest using pgsodium AEAD (XChaCha20-Poly1305). The encryption root key is managed by Supabase KMS and never stored in the database. Access is enforced via Row Level Security per user/organisation.
+
+---
+
+## 15. Docker Containers
+
+ASD provides pre-built Docker containers for portable development environments and lightweight tunnel automation. For the full reference, see [um_docker.md](./um_docker.md).
+
+### ASD Sandbox
+
+A complete development environment in a container (~750 MB). Includes ASD CLI, Caddy, asd-tunnel, ttyd, VS Code Server, Claude Code, and tmux.
+
+```bash
+# Interactive sandbox (recommended)
+asd sandbox shell
+
+# Autostart mode: starts all services, drops into interactive menu
+docker run -it --network host \
+  -e ASD_API_KEY=sk_your_key \
+  -v "$(pwd):/workspace" \
+  asd-stack.cr.de-fra.ionos.com/asd-sandbox:latest autostart
+
+# Autostart + expose port 3000 via tunnel
+docker run -it --network host \
+  -e ASD_API_KEY=sk_your_key \
+  -v "$(pwd):/workspace" \
+  asd-stack.cr.de-fra.ionos.com/asd-sandbox:latest \
+  autostart expose 3000
+```
+
+**Features:**
+- Interactive menu with system info, running services, and active tunnel URLs
+- Tmux session management (detach with `Ctrl+B D`, reattach with `docker start -ai`)
+- Automatic login and tunnel provisioning via `ASD_API_KEY`
+- Project workspace mounted at `/workspace`
+
+### ASD Tunnel (Lightweight)
+
+A minimal (~20 MB) scratch container for CI/CD pipelines and automation:
+
+```bash
+# Expose port 3000 — that's it
+docker run --rm --network host \
+  asd-stack.cr.de-fra.ionos.com/asd-tunnel:latest \
+  connect --api-key sk_your_key -F myapp:3000
+
+# Run in background for CI
+docker run -d --network host --name tunnel \
+  asd-stack.cr.de-fra.ionos.com/asd-tunnel:latest \
+  connect --api-key sk_your_key -F myapp:3000
+```
+
+Zero OS, zero shell — just the statically compiled `asd-tunnel` binary and CA certificates.
+
+See [um_docker.md](./um_docker.md) for environment variables, volume mounts, GitHub Actions examples, and more.
 
 ---
 
