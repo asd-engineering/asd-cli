@@ -2,10 +2,15 @@
 # Usage: irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex
 # Or with custom install dir: $env:INSTALL_DIR = "C:\Program Files\asd"; irm ... | iex
 #
-# This script will:
-# 1. Download the latest ASD CLI binary
-# 2. Install to %LOCALAPPDATA%\asd\bin (or custom INSTALL_DIR)
-# 3. Add to PATH if needed
+# Options (via environment variables):
+#   INSTALL_DIR  - Custom install directory (default: %LOCALAPPDATA%\asd\bin)
+#   VERSION      - Install a specific version tag (e.g. the latest tag from releases)
+#                  Set VERSION=list to show available releases
+#
+# Examples:
+#   irm https://asd.host/install.ps1 | iex                                          # Latest
+#   $env:VERSION = "<tag>"; irm https://asd.host/install.ps1 | iex                   # Specific version
+#   $env:VERSION = "list"; irm https://asd.host/install.ps1 | iex                   # List versions
 #
 # After installation, update with: asd update
 #
@@ -21,6 +26,7 @@ $FallbackRepo = "asd-engineering/.asd"
 $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { "$env:LOCALAPPDATA\asd\bin" }
 $Platform = "windows-x64"
 $ArchiveName = "asd-windows-x64.zip"
+$Version = if ($env:VERSION) { $env:VERSION } else { "" }
 
 function Write-Info($Message) {
     Write-Host "[INFO] $Message" -ForegroundColor Green
@@ -35,19 +41,50 @@ function Write-Error($Message) {
     exit 1
 }
 
-function Get-LatestVersion {
-    $repos = @($Repo, $FallbackRepo)
+function Get-AuthHeaders {
     $headers = @{
         "Accept" = "application/vnd.github+json"
         "User-Agent" = "asd-cli-installer"
     }
 
-    # Add auth if available
     if ($env:GITHUB_TOKEN) {
         $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
     } elseif ($env:GH_TOKEN) {
         $headers["Authorization"] = "Bearer $env:GH_TOKEN"
     }
+
+    return $headers
+}
+
+function Get-SpecificVersion($RequestedVersion) {
+    # Ensure it starts with 'v'
+    if (-not $RequestedVersion.StartsWith("v")) {
+        $RequestedVersion = "v$RequestedVersion"
+    }
+
+    $repos = @($Repo, $FallbackRepo)
+    $headers = Get-AuthHeaders
+
+    foreach ($repo in $repos) {
+        $apiUrl = "https://api.github.com/repos/$repo/releases/tags/$RequestedVersion"
+
+        try {
+            $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
+            if ($response.tag_name) {
+                $script:ActiveRepo = $repo
+                return $response.tag_name
+            }
+        } catch {
+            continue
+        }
+    }
+
+    Write-Error "Version $RequestedVersion not found. Use `$env:VERSION = 'list'` to see available versions."
+}
+
+function Get-LatestVersion {
+    $repos = @($Repo, $FallbackRepo)
+    $headers = Get-AuthHeaders
 
     foreach ($repo in $repos) {
         $apiUrl = "https://api.github.com/repos/$repo/releases/latest"
@@ -59,7 +96,6 @@ function Get-LatestVersion {
                 return $response.tag_name
             }
         } catch {
-            # Try next repo
             continue
         }
     }
@@ -67,20 +103,73 @@ function Get-LatestVersion {
     Write-Error "Failed to fetch latest release. Check your internet connection or set GITHUB_TOKEN for private repos."
 }
 
-function Install-Asd {
-    Write-Info "Detected platform: $Platform"
+function Show-AvailableVersions {
+    $repos = @($Repo, $FallbackRepo)
+    $headers = Get-AuthHeaders
 
-    # Get latest version
-    $version = Get-LatestVersion
-    if (-not $version) {
-        Write-Error "Could not determine latest version"
+    foreach ($repo in $repos) {
+        $apiUrl = "https://api.github.com/repos/$repo/releases?per_page=20"
+
+        try {
+            $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
+            if ($response.Count -gt 0) {
+                Write-Host ""
+                Write-Info "Available versions (from $repo):"
+                Write-Host ""
+
+                $first = $true
+                $exampleTag = ""
+                foreach ($release in $response) {
+                    $tag = $release.tag_name
+                    if ($first) {
+                        Write-Host "  $tag  (latest)"
+                        $first = $false
+                    } else {
+                        Write-Host "  $tag"
+                        if (-not $exampleTag) { $exampleTag = $tag }
+                    }
+                }
+
+                Write-Host ""
+                Write-Info "Install a specific version:"
+                Write-Host "  `$env:VERSION = '$exampleTag'; irm https://asd.host/install.ps1 | iex"
+                Write-Host ""
+                return
+            }
+        } catch {
+            continue
+        }
     }
 
-    Write-Info "Latest version: $version"
+    Write-Error "Failed to fetch releases. Check your internet connection."
+}
+
+function Install-Asd {
+    # Handle VERSION=list
+    if ($Version -eq "list") {
+        Show-AvailableVersions
+        return
+    }
+
+    Write-Info "Detected platform: $Platform"
+
+    # Get version — specific or latest
+    if ($Version) {
+        $resolvedVersion = Get-SpecificVersion $Version
+        Write-Info "Requested version: $resolvedVersion"
+    } else {
+        $resolvedVersion = Get-LatestVersion
+        Write-Info "Latest version: $resolvedVersion"
+    }
+
+    if (-not $resolvedVersion) {
+        Write-Error "Could not determine version"
+    }
+
     Write-Info "Source: $ActiveRepo"
 
     # Construct download URL
-    $downloadUrl = "https://github.com/$ActiveRepo/releases/download/$version/$ArchiveName"
+    $downloadUrl = "https://github.com/$ActiveRepo/releases/download/$resolvedVersion/$ArchiveName"
 
     # Create install directory
     if (-not (Test-Path $InstallDir)) {
@@ -168,7 +257,7 @@ function Install-Asd {
                 $installedVersion = & $destBin --version 2>$null
                 Write-Info "   Version: $installedVersion"
             } catch {
-                Write-Info "   Version: $version"
+                Write-Info "   Version: $resolvedVersion"
             }
 
             Write-Host ""
@@ -190,13 +279,15 @@ function Install-Asd {
                 Write-Host "   `$env:PATH += `";$InstallDir`""
                 Write-Host ""
 
-                # Offer to add to PATH
-                $addToPath = Read-Host "Add to PATH now? (y/n)"
-                if ($addToPath -eq "y" -or $addToPath -eq "Y") {
-                    $newPath = "$currentPath;$InstallDir"
-                    [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-                    $env:PATH = "$env:PATH;$InstallDir"
-                    Write-Info "Added to PATH. Restart your terminal for changes to take effect."
+                # Offer to add to PATH (only in interactive mode)
+                if ([Environment]::UserInteractive -and -not $env:CI) {
+                    $addToPath = Read-Host "Add to PATH now? (y/n)"
+                    if ($addToPath -eq "y" -or $addToPath -eq "Y") {
+                        $newPath = "$currentPath;$InstallDir"
+                        [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+                        $env:PATH = "$env:PATH;$InstallDir"
+                        Write-Info "Added to PATH. Restart your terminal for changes to take effect."
+                    }
                 }
             }
         } else {

@@ -145,6 +145,7 @@ list_versions() {
 
 # Get release tag — uses VERSION env var if set, otherwise fetches latest
 # Tries public repo first, falls back to private repo
+# Outputs two lines: version\nrepo (to avoid subshell variable loss)
 get_version() {
   # If VERSION is explicitly set, validate it exists and use it
   if [[ -n "$VERSION" ]]; then
@@ -162,7 +163,7 @@ get_version() {
 
     for repo in "${repos[@]}"; do
       local api_url="https://api.github.com/repos/${repo}/releases/tags/${VERSION}"
-      local response http_code
+      local http_code
 
       if [[ -n "$auth_header" ]]; then
         http_code=$(curl -fsSL -o /dev/null -w '%{http_code}' -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || continue
@@ -171,8 +172,8 @@ get_version() {
       fi
 
       if [[ "$http_code" == "200" ]]; then
-        ACTIVE_REPO="$repo"
         echo "$VERSION"
+        echo "$repo"
         return 0
       fi
     done
@@ -204,13 +205,72 @@ get_version() {
     tag=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -n "$tag" ]]; then
-      ACTIVE_REPO="$repo"
       echo "$tag"
+      echo "$repo"
       return 0
     fi
   done
 
   error "Failed to fetch latest release. Check your internet connection or set GITHUB_TOKEN for private repos."
+}
+
+# Minimal Termux install when no pre-built Termux archive exists anywhere.
+# Falls back to npm install which ships the JS source (no native compilation needed).
+_install_minimal_termux() {
+  local version="$1"
+  local repo="$2"
+
+  # npm install is the reliable fallback — the npm package contains JS source
+  # that runs under Node.js without native compilation
+  if command -v npm &>/dev/null; then
+    info "Installing via npm (fallback for missing Termux archive)..."
+    local npm_version="${version#v}"  # strip leading v
+    if npm install -g "@asd-engineering/cli@$npm_version" 2>/dev/null || \
+       npm install -g "@asd-engineering/cli@latest" 2>/dev/null; then
+      info "✅ ASD CLI installed via npm (minimal — Node.js runtime)"
+      info "   Version: $(asd --version 2>/dev/null || echo "$version")"
+      echo ""
+      warn "Native binaries (caddy, ttyd, code-server) are not bundled."
+      warn "Install them manually: pkg install caddy ttyd"
+      echo ""
+      warn "When a Termux build becomes available, re-run this installer"
+      warn "to get the full package with all binaries."
+      return 0
+    fi
+    warn "npm install failed — trying source clone fallback..."
+  fi
+
+  # Last resort: clone the public repo and create a Node.js entry point
+  if command -v git &>/dev/null && command -v node &>/dev/null; then
+    local asd_home
+    asd_home="$(get_asd_home)"
+    local asd_src="$asd_home/src"
+    info "Cloning ASD CLI source for Node.js execution..."
+
+    if git clone --depth 1 "https://github.com/${repo}.git" "$asd_src" 2>/dev/null; then
+      mkdir -p "$INSTALL_DIR"
+      local node_bin
+      node_bin=$(command -v node)
+      cat > "$INSTALL_DIR/asd" <<WRAPPER
+#!/data/data/com.termux/files/usr/bin/bash
+set -eu
+exec "$node_bin" "$asd_src/cli.ts" "\$@"
+WRAPPER
+      chmod +x "$INSTALL_DIR/asd"
+
+      info "✅ ASD CLI installed (source — Node.js runtime)"
+      info "   Location: $INSTALL_DIR/asd"
+      echo ""
+      warn "This is a source install without pre-built binaries."
+      warn "Install helpers manually: pkg install caddy ttyd"
+      return 0
+    fi
+  fi
+
+  error "No Termux package found and fallback installation failed.
+Ensure Node.js and npm are installed: pkg install nodejs-lts
+Then try: npm install -g @asd-engineering/cli
+Or check https://github.com/asd-engineering/asd-cli/releases"
 }
 
 # Download and install
@@ -249,9 +309,11 @@ install_asd() {
     info "Node.js: $(node --version)"
   fi
 
-  # Initialize ACTIVE_REPO (will be set by get_version)
-  ACTIVE_REPO=""
-  version=$(get_version)
+  # get_version outputs two lines: version\nrepo
+  local version_output
+  version_output=$(get_version)
+  version=$(echo "$version_output" | head -1)
+  ACTIVE_REPO=$(echo "$version_output" | tail -1)
   [[ -z "$version" ]] && error "Could not determine version"
   if [[ -n "$VERSION" ]]; then
     info "Requested version: $version"
@@ -279,12 +341,38 @@ install_asd() {
   info "Downloading $archive_name..."
 
   # Helper: download with optional auth
+  # For private repos, GitHub browser URLs redirect to a CDN that strips auth headers.
+  # Use the API asset endpoint instead when a token is available and the URL is a
+  # github.com releases/download URL.
   _download() {
     local url="$1" dest="$2"
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-      curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" "$url" -o "$dest" 2>/dev/null
-    elif [[ -n "${GH_TOKEN:-}" ]]; then
-      curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/octet-stream" "$url" -o "$dest" 2>/dev/null
+    local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+
+    if [[ -n "$token" ]]; then
+      # Try API-based download first for github.com release URLs
+      # Pattern: https://github.com/OWNER/REPO/releases/download/TAG/ASSET
+      if [[ "$url" =~ ^https://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/(.+)$ ]]; then
+        local owner="${BASH_REMATCH[1]}" repo_name="${BASH_REMATCH[2]}" tag="${BASH_REMATCH[3]}" asset="${BASH_REMATCH[4]}"
+        local api_url="https://api.github.com/repos/${owner}/${repo_name}/releases/tags/${tag}"
+        local release_json
+        release_json=$(curl -fsSL -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || release_json=""
+        if [[ -n "$release_json" ]]; then
+          local asset_url
+          asset_url=$(echo "$release_json" | grep -o "\"browser_download_url\": *\"[^\"]*/${asset}\"" | cut -d'"' -f4)
+          if [[ -n "$asset_url" ]]; then
+            # Download via API with octet-stream accept to get the binary directly
+            local asset_id
+            asset_id=$(echo "$release_json" | grep -B5 "\"name\": *\"${asset}\"" | grep -o '"id": *[0-9]*' | head -1 | grep -o '[0-9]*')
+            if [[ -n "$asset_id" ]]; then
+              curl -fsSL -H "Authorization: Bearer ${token}" -H "Accept: application/octet-stream" \
+                "https://api.github.com/repos/${owner}/${repo_name}/releases/assets/${asset_id}" \
+                -o "$dest" 2>/dev/null && return 0
+            fi
+          fi
+        fi
+      fi
+      # Fallback to direct URL with auth
+      curl -fsSL -H "Authorization: Bearer ${token}" -H "Accept: application/octet-stream" "$url" -o "$dest" 2>/dev/null
     else
       curl -fsSL "$url" -o "$dest" 2>/dev/null
     fi
@@ -300,20 +388,28 @@ install_asd() {
       [[ -n "${GITHUB_TOKEN:-}" ]] && auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
       [[ -n "${GH_TOKEN:-}" ]] && auth_header="Authorization: Bearer ${GH_TOKEN}"
 
-      local api_url="https://api.github.com/repos/${repo_for_download}/releases?per_page=10"
-      local releases_json
-      if [[ -n "$auth_header" ]]; then
-        releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || releases_json=""
-      else
-        releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || releases_json=""
-      fi
+      # Paginated search: check up to 300 releases (10 pages x 30 per page)
+      local page=1
+      local max_pages=10
+      while [[ $page -le $max_pages && -z "$found_version" ]]; do
+        local api_url="https://api.github.com/repos/${repo_for_download}/releases?per_page=30&page=$page"
+        local releases_json
+        if [[ -n "$auth_header" ]]; then
+          releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" -H "$auth_header" "$api_url" 2>/dev/null) || releases_json=""
+        else
+          releases_json=$(curl -fsSL -H "Accept: application/vnd.github+json" "$api_url" 2>/dev/null) || releases_json=""
+        fi
 
-      if [[ -n "$releases_json" ]]; then
+        [[ -z "$releases_json" ]] && break
+
         # Parse release tags and check each for the termux asset
         local tags
         tags=$(echo "$releases_json" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+        local tag_count=0
         while IFS= read -r prev_tag; do
-          [[ -z "$prev_tag" || "$prev_tag" == "$version" ]] && continue
+          [[ -z "$prev_tag" ]] && continue
+          tag_count=$((tag_count + 1))
+          [[ "$prev_tag" == "$version" ]] && continue
           local prev_url="https://github.com/${repo_for_download}/releases/download/${prev_tag}/${archive_name}"
           if _download "$prev_url" "$tmp_dir/$archive_name"; then
             found_version="$prev_tag"
@@ -321,12 +417,20 @@ install_asd() {
             break
           fi
         done <<< "$tags"
-      fi
+
+        # If fewer than 30 results, no more pages
+        [[ $tag_count -lt 30 ]] && break
+        page=$((page + 1))
+      done
 
       if [[ -z "$found_version" ]]; then
-        error "No Termux package found in any recent release.
-The phone build service may have been offline. Try again later or install manually.
-See https://github.com/asd-engineering/asd-cli/releases"
+        warn "No Termux package found in any release."
+        warn "Installing minimal ASD CLI (Node.js wrapper only)..."
+        warn "Native binaries (caddy, ttyd, code-server) won't be pre-bundled."
+        warn "Install them manually: pkg install caddy ttyd"
+        echo ""
+        _install_minimal_termux "$version" "$repo_for_download"
+        return 0
       fi
     elif [[ "$repo_for_download" == "$REPO" ]]; then
       error "Download failed. Binary may not be available for '${platform}'.
