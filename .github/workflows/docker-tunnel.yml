@@ -15,7 +15,7 @@ on:
     types: [tunnel-release]
 
 env:
-  IMAGE: ghcr.io/asd-engineering/asd-tunnel
+  IMAGE: ghcr.io/asd-engineering/asd-tunnel-server
   PLATFORMS: linux/arm/v7,linux/arm64,linux/amd64
 
 permissions:
