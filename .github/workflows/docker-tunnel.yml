@@ -33,6 +33,9 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'main' }}
           token: ${{ secrets.TUNNEL_REPO_PAT }}
 
+      - name: Strip source label from Dockerfile
+        run: sed -i '/org.opencontainers.image.source/d' Dockerfile
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -57,10 +60,8 @@ jobs:
           DATE=$(date -u +%Y-%m-%d-%H%M)
 
           TAGS="${{ env.IMAGE }}:${TAG}"
-          # Always add SHA and date tags
           TAGS="${TAGS},${{ env.IMAGE }}:${SHA}"
           TAGS="${TAGS},${{ env.IMAGE }}:${DATE}"
-          # Add latest if building from main
           if [ "$REF" = "main" ]; then
             TAGS="${TAGS},${{ env.IMAGE }}:latest"
           fi
@@ -84,5 +85,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
-            org.opencontainers.image.source=https://github.com/asd-engineering/asd-tunnel
+            org.opencontainers.image.source=https://github.com/asd-engineering/asd-cli
             org.opencontainers.image.description=Enterprise HTTP(S)/WS(S)/TCP tunneling solution
