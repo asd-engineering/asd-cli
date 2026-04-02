@@ -1,0 +1,88 @@
+name: Docker Tunnel Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. latest, v1.28.1)"
+        required: false
+        default: "latest"
+      ref:
+        description: "asd-tunnel git ref to build (branch, tag, or SHA)"
+        required: false
+        default: "main"
+  repository_dispatch:
+    types: [tunnel-release]
+
+env:
+  IMAGE: ghcr.io/asd-engineering/asd-tunnel
+  PLATFORMS: linux/arm/v7,linux/arm64,linux/amd64
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout asd-tunnel source
+        uses: actions/checkout@v4
+        with:
+          repository: asd-engineering/asd-tunnel
+          ref: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'main' }}
+          token: ${{ secrets.TUNNEL_REPO_PAT }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          TAG="${{ github.event.inputs.tag || github.event.client_payload.tag || 'latest' }}"
+          REF="${{ github.event.inputs.ref || github.event.client_payload.ref || 'main' }}"
+          SHA=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y-%m-%d-%H%M)
+
+          TAGS="${{ env.IMAGE }}:${TAG}"
+          # Always add SHA and date tags
+          TAGS="${TAGS},${{ env.IMAGE }}:${SHA}"
+          TAGS="${TAGS},${{ env.IMAGE }}:${DATE}"
+          # Add latest if building from main
+          if [ "$REF" = "main" ]; then
+            TAGS="${TAGS},${{ env.IMAGE }}:latest"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Building tags: ${TAGS}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          target: release
+          platforms: ${{ env.PLATFORMS }}
+          build-args: |
+            VERSION=${{ github.event.inputs.tag || github.event.client_payload.tag || 'dev' }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ github.event.inputs.ref || 'main' }}
+            REPOSITORY=asd-engineering/asd-tunnel
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/asd-engineering/asd-tunnel
+            org.opencontainers.image.description=Enterprise HTTP(S)/WS(S)/TCP tunneling solution
