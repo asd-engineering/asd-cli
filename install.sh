@@ -6,6 +6,8 @@
 #   INSTALL_DIR  - Custom install directory (default: ~/.local/bin)
 #   VERSION      - Install a specific version tag (e.g. VERSION=v2.1.8-beta.1)
 #                  Set VERSION=list to show available releases
+#   ASD_INSTALL_BASE_URL - Override download base URL (for CI testing with local files)
+#                          Supports: file:///path/to/dir, http://..., or /absolute/path
 #
 # Examples:
 #   curl -fsSL https://asd.host/install.sh | bash                              # Latest
@@ -22,6 +24,7 @@ REPO="asd-engineering/asd-cli"
 FALLBACK_REPO="asd-engineering/.asd"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${VERSION:-}"
+ASD_INSTALL_BASE_URL="${ASD_INSTALL_BASE_URL:-}"
 
 # Colors
 RED='\033[0;31m'
@@ -309,27 +312,41 @@ install_asd() {
     info "Node.js: $(node --version)"
   fi
 
-  # get_version outputs two lines: version\nrepo
-  local version_output
-  version_output=$(get_version)
-  version=$(echo "$version_output" | head -1)
-  ACTIVE_REPO=$(echo "$version_output" | tail -1)
-  [[ -z "$version" ]] && error "Could not determine version"
-  if [[ -n "$VERSION" ]]; then
-    info "Requested version: $version"
+  # Resolve version and download URL
+  if [[ -n "$ASD_INSTALL_BASE_URL" ]]; then
+    version="${VERSION:-local}"
+    [[ "$version" != v* && "$version" != "local" ]] && version="v${version}"
+    ACTIVE_REPO="local"
+    info "Using local install source: $ASD_INSTALL_BASE_URL"
+    info "Version: $version"
   else
-    info "Latest version: $version"
+    # get_version outputs two lines: version\nrepo
+    local version_output
+    version_output=$(get_version)
+    version=$(echo "$version_output" | head -1)
+    ACTIVE_REPO=$(echo "$version_output" | tail -1)
+    [[ -z "$version" ]] && error "Could not determine version"
+    if [[ -n "$VERSION" ]]; then
+      info "Requested version: $version"
+    else
+      info "Latest version: $version"
+    fi
+    info "Source: ${ACTIVE_REPO:-$REPO}"
   fi
-  info "Source: ${ACTIVE_REPO:-$REPO}"
 
-  # Construct download URL using the repo that had releases
+  # Construct archive name and download URL
   local repo_for_download="${ACTIVE_REPO:-$REPO}"
   if [[ "$platform" == "windows-x64" ]]; then
     archive_name="asd-windows-x64.zip"
   else
     archive_name="asd-${platform}.tar.gz"
   fi
-  download_url="https://github.com/${repo_for_download}/releases/download/${version}/${archive_name}"
+
+  if [[ -n "$ASD_INSTALL_BASE_URL" ]]; then
+    download_url="${ASD_INSTALL_BASE_URL%/}/${archive_name}"
+  else
+    download_url="https://github.com/${repo_for_download}/releases/download/${version}/${archive_name}"
+  fi
 
   # Create install directory
   mkdir -p "$INSTALL_DIR"
@@ -346,6 +363,23 @@ install_asd() {
   # github.com releases/download URL.
   _download() {
     local url="$1" dest="$2"
+
+    # Local file path (absolute or file:// URI)
+    local local_path=""
+    if [[ "$url" == file://* ]]; then
+      local_path="${url#file://}"
+    elif [[ "$url" == /* && -f "$url" ]]; then
+      local_path="$url"
+    fi
+
+    if [[ -n "$local_path" ]]; then
+      if [[ -f "$local_path" ]]; then
+        cp "$local_path" "$dest"
+        return 0
+      fi
+      return 1
+    fi
+
     local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
     if [[ -n "$token" ]]; then

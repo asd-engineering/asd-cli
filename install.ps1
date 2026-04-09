@@ -6,6 +6,8 @@
 #   INSTALL_DIR  - Custom install directory (default: %LOCALAPPDATA%\asd\bin)
 #   VERSION      - Install a specific version tag (e.g. the latest tag from releases)
 #                  Set VERSION=list to show available releases
+#   ASD_INSTALL_BASE_URL - Override download base URL (for CI testing with local files)
+#                          Supports: file:///path, C:\path, or http://...
 #
 # Examples:
 #   irm https://asd.host/install.ps1 | iex                                          # Latest
@@ -27,6 +29,7 @@ $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { "$env:LOCALAPPDA
 $Platform = "windows-x64"
 $ArchiveName = "asd-windows-x64.zip"
 $Version = if ($env:VERSION) { $env:VERSION } else { "" }
+$InstallBaseUrl = if ($env:ASD_INSTALL_BASE_URL) { $env:ASD_INSTALL_BASE_URL } else { "" }
 
 function Write-Info($Message) {
     Write-Host "[INFO] $Message" -ForegroundColor Green
@@ -154,7 +157,15 @@ function Install-Asd {
     Write-Info "Detected platform: $Platform"
 
     # Get version — specific or latest
-    if ($Version) {
+    if ($InstallBaseUrl) {
+        $resolvedVersion = if ($Version) { $Version } else { "local" }
+        if ($resolvedVersion -ne "local" -and -not $resolvedVersion.StartsWith("v")) {
+            $resolvedVersion = "v$resolvedVersion"
+        }
+        $script:ActiveRepo = "local"
+        Write-Info "Using local install source: $InstallBaseUrl"
+        Write-Info "Version: $resolvedVersion"
+    } elseif ($Version) {
         $resolvedVersion = Get-SpecificVersion $Version
         Write-Info "Requested version: $resolvedVersion"
     } else {
@@ -166,10 +177,16 @@ function Install-Asd {
         Write-Error "Could not determine version"
     }
 
-    Write-Info "Source: $ActiveRepo"
+    if (-not $InstallBaseUrl) {
+        Write-Info "Source: $ActiveRepo"
+    }
 
     # Construct download URL
-    $downloadUrl = "https://github.com/$ActiveRepo/releases/download/$resolvedVersion/$ArchiveName"
+    if ($InstallBaseUrl) {
+        $downloadUrl = "$($InstallBaseUrl.TrimEnd('\').TrimEnd('/'))/$ArchiveName"
+    } else {
+        $downloadUrl = "https://github.com/$ActiveRepo/releases/download/$resolvedVersion/$ArchiveName"
+    }
 
     # Create install directory
     if (-not (Test-Path $InstallDir)) {
@@ -185,18 +202,37 @@ function Install-Asd {
         $extractDir = Join-Path $tmpDir "extracted"
 
         Write-Info "Downloading $ArchiveName..."
-        $headers = @{
-            "Accept" = "application/octet-stream"
-            "User-Agent" = "asd-cli-installer"
+
+        # Local file path or remote URL
+        $isLocalPath = $false
+        $localPath = ""
+        if ($downloadUrl -match '^file://') {
+            $localPath = $downloadUrl -replace '^file://', ''
+            $isLocalPath = $true
+        } elseif ($downloadUrl -match '^[A-Za-z]:\\' -or ($downloadUrl -match '^/' -and (Test-Path $downloadUrl -ErrorAction SilentlyContinue))) {
+            $localPath = $downloadUrl
+            $isLocalPath = $true
         }
 
-        if ($env:GITHUB_TOKEN) {
-            $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
-        } elseif ($env:GH_TOKEN) {
-            $headers["Authorization"] = "Bearer $env:GH_TOKEN"
-        }
+        if ($isLocalPath) {
+            if (-not (Test-Path $localPath)) {
+                Write-Error "Local archive not found: $localPath"
+            }
+            Copy-Item -Path $localPath -Destination $archivePath -Force
+        } else {
+            $headers = @{
+                "Accept" = "application/octet-stream"
+                "User-Agent" = "asd-cli-installer"
+            }
 
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -Headers $headers
+            if ($env:GITHUB_TOKEN) {
+                $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+            } elseif ($env:GH_TOKEN) {
+                $headers["Authorization"] = "Bearer $env:GH_TOKEN"
+            }
+
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -Headers $headers
+        }
 
         Write-Info "Extracting..."
         Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
