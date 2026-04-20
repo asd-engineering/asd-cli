@@ -1,8 +1,12 @@
 # ASD CLI User Manual
 
-**Version:** 2.2.0 | **Last Updated:** 2026-03-06
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
 
 Share local services over HTTPS with anyone, anywhere. No port forwarding, no firewall rules, no certificates to manage.
+
+For the list of changes in each release, see [CHANGELOG.md](../CHANGELOG.md) (authoritative, [Keep a Changelog] format). GitHub release pages on [`.asd`](https://github.com/asd-engineering/.asd/releases) and [`asd-cli`](https://github.com/asd-engineering/asd-cli/releases) mirror the relevant section per release.
+
+[Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 
 ---
 

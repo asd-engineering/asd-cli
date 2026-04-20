@@ -1,6 +1,6 @@
 # ASD CLI Services
 
-**Version:** 2.0.2 | **Last Updated:** 2026-02-02
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
 
 Built-in services for remote development: web terminal, VS Code, database UI, and network inspection.
 

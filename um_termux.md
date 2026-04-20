@@ -1,6 +1,10 @@
 # ASD CLI on Android (Termux)
 
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
+
 Run ASD CLI on Android devices using [Termux](https://termux.dev/).
+
+Release-over-release changes are tracked in [../CHANGELOG.md](../CHANGELOG.md).
 
 ## Requirements
 

@@ -1,6 +1,6 @@
 # ASD CLI Command Reference
 
-**Version:** 2.3.0 | **Last Updated:** 2026-03-06
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
 
 Complete reference for all ASD CLI commands.
 
@@ -13,7 +13,7 @@ Complete reference for all ASD CLI commands.
 | `asd init` | Initialize project workspace |
 | `asd run <task>` | Run automation task from asd.yaml |
 | `asd expose <port>` | Expose a port with tunnel |
-| `asd login` | Login via OAuth |
+| `asd login` | Login via OAuth (auto-refreshes expired tokens) |
 | `asd login key` | Login with API key (CI/headless) |
 | `asd logout` | Sign out |
 | `asd auth status` | Show auth status |
@@ -29,6 +29,12 @@ Complete reference for all ASD CLI commands.
 | `asd deps update` | Update binaries to latest versions |
 | `asd update` | Update ASD CLI |
 | `asd ac install` | Install shell tab-completions |
+| **Knowledge commands** (new in 2.6) | |
+| `asd macro` | List all 30 template macros; `asd macro <name>` for detail |
+| `asd schema` | Config-field reference (Zod-derived, asd.yaml + manifests) |
+| `asd schema automation` | Automation YAML schema reference |
+| `asd rules` | Behavioral rules for AI agents / contributors |
+| `asd flow` | Template-to-.env data pipeline visualization |
 
 ---
 
@@ -845,6 +851,75 @@ Key environment variables for ASD:
 | `asd inspect` | 🟠 |
 | `asd deps install/update` | 🟢 |
 | `asd ac install/remove/status/refresh` | 🟢 |
+| `asd macro / asd macro <name>` | ✅ (new in 2.6) |
+| `asd schema / asd schema automation` | ✅ (new in 2.6) |
+| `asd rules` | 🟢 (new in 2.6) |
+| `asd flow` | 🟢 (new in 2.6) |
+| `asd update` | ✅ (fixed on Windows + Termux in 2.6) |
+
+---
+
+## Knowledge Commands (new in v2.6)
+
+Four introspection commands that surface the embedded source of truth —
+use these instead of digging through markdown files when you want
+accurate, live-from-code answers.
+
+### `asd macro`
+
+List every template macro available inside `${{ ... }}` expressions.
+
+```bash
+asd macro                     # Grouped list of all 30 macros
+asd macro <name>              # Detail view with examples and notes
+asd macro exposedOrigin       # Forgiving lookup — works without prefix
+asd macro macro.exposedOrigin # Also works (exact id)
+asd macro --json              # Machine-readable dump for tooling
+```
+
+Backed by `modules/core/config/api.schema.ts::TEMPLATE_MACROS`. A CI
+drift test (`modules/automation/tests/templating-docs.test.ts`) fails
+if a macro is added to the engine without a matching doc entry.
+
+See also: [`docs/TEMPLATE_MACROS.md`](./TEMPLATE_MACROS.md).
+
+### `asd schema`
+
+Print the full Zod-derived configuration schema — `asd.yaml`, service
+entries, `net.manifest.yaml`, plugin service entries — plus the
+template-macro reference.
+
+```bash
+asd schema                    # Full config schema + macro index
+asd schema --json             # Machine-readable dump
+asd schema --ai               # Adds external-tool doc URLs
+asd schema automation         # Automation YAML schema (all step types)
+asd schema automation pty     # Filter to a single section
+```
+
+Sources: `modules/core/config/asd-config.ts`, `modules/network/scripts/net.schema.ts`, `modules/automation/src/schema.ts`.
+
+### `asd rules`
+
+Behavioral rules for AI agents and contributors — routing patterns,
+auth flows, naming conventions.
+
+```bash
+asd rules                     # All rules
+asd rules <category>          # Filter by category (e.g. routing, auth)
+```
+
+### `asd flow`
+
+Visualize the template-to-.env data pipeline: which templates are
+read, in what order, with which macros expanded at each stage.
+
+```bash
+asd flow
+```
+
+Pairs with `asd macro` for understanding how a service's `env:` block
+resolves from `tpl.env` → manifest env → asd.yaml service env.
 
 ---
 
@@ -853,6 +928,7 @@ Key environment variables for ASD:
 - [User Manual](./USER_MANUAL.md) - Complete beginner guide
 - [Services](./um_service.md) - Service details
 - [asd.yaml](./um_asd_yaml.md) - Configuration reference
+- [Template Macros](./TEMPLATE_MACROS.md) - All 30 template macros
 - [Feature Maturity](./FEATURE_MATURITY.md) - What's production-ready
 
 ---

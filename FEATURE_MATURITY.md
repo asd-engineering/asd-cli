@@ -1,6 +1,6 @@
 # ASD CLI Feature Maturity Assessment
 
-**Version:** 1.8.0 | **Last Updated:** 2026-03-06 | **Status:** ACTIVE
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20 | **Status:** ACTIVE
 
 This document tracks the maturity level of ASD CLI features, helping users understand what's production-ready versus experimental.
 

@@ -1,7 +1,11 @@
 # ASD CLI Advanced Manual (asd.yaml and Operations)
 
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
+
 This is the deep-dive reference. If you want the quick, simple flow, start here:
 - `docs/USER_MANUAL.md`
+
+Template macros are fully documented in [`TEMPLATE_MACROS.md`](./TEMPLATE_MACROS.md) (auto-generated from the engine source, stays current). Release-over-release changes are in [../CHANGELOG.md](../CHANGELOG.md).
 
 ---
 

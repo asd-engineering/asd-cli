@@ -1,8 +1,10 @@
 # ASD API Reference
 
-**Version:** 2.1.0 | **Last Updated:** 2026-03-06
+**Version:** 2.6.0 | **Last Updated:** 2026-04-20
 
 Programmatic access to ASD tunnel services.
+
+Release-over-release changes are tracked in [../CHANGELOG.md](../CHANGELOG.md).
 
 ---
 
