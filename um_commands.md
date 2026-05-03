@@ -8,33 +8,23 @@ Complete reference for all ASD CLI commands.
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `asd init` | Initialize project workspace |
-| `asd run <task>` | Run automation task from asd.yaml |
-| `asd expose <port>` | Expose a port with tunnel |
-| `asd login` | Login via OAuth (auto-refreshes expired tokens) |
-| `asd login key` | Login with API key (CI/headless) |
-| `asd logout` | Sign out |
-| `asd auth status` | Show auth status |
-| `asd auth whoami` | Show current user |
-| `asd auth export` | Export SSH key as env vars |
-| `asd auth credentials` | Show all credential sources |
-| `asd net` | Open network TUI |
-| `asd terminal` | Web terminal management |
-| `asd code` | VS Code server management |
-| `asd config validate` | Validate asd.yaml configuration |
-| `asd skill install` | Install AI assistant skills |
-| `asd deps install` | Install managed binaries |
-| `asd deps update` | Update binaries to latest versions |
-| `asd update` | Update ASD CLI |
-| `asd ac install` | Install shell tab-completions |
-| **Knowledge commands** (new in 2.6) | |
-| `asd macro` | List all 30 template macros; `asd macro <name>` for detail |
-| `asd schema` | Config-field reference (Zod-derived, asd.yaml + manifests) |
-| `asd schema automation` | Automation YAML schema reference |
-| `asd rules` | Behavioral rules for AI agents / contributors |
-| `asd flow` | Template-to-.env data pipeline visualization |
+**Complete list of every `asd <cmd>`** — all 209 commands across 41
+groups — lives in **[`docs/generated/COMMANDS.md`](./generated/COMMANDS.md)**,
+generated from `registerCommand(...)` call sites and kept in sync by
+a CI drift test. For per-command help and flags, run
+`asd <command> --help`. For the live grouped list,
+`asd core list-commands` (or just `asd help`).
+
+This document covers the **day-to-day workflow commands** below with
+additional context — how to use them together, common patterns, and
+flags that aren't obvious from `--help` alone. Knowledge commands
+(`asd macro`, `asd schema`, `asd rules`, `asd flow`) are documented
+in their own files:
+
+- [docs/TEMPLATE_MACROS.md](./TEMPLATE_MACROS.md) — every macro
+- [docs/generated/ASD_YAML_SPEC.md](./generated/ASD_YAML_SPEC.md) — every `asd.yaml` field
+- [docs/generated/NET_MANIFEST_SPEC.md](./generated/NET_MANIFEST_SPEC.md) — every `net.manifest.yaml` field
+- [docs/generated/AUTOMATION_SPEC.md](./generated/AUTOMATION_SPEC.md) — every automation step type
 
 ---
 

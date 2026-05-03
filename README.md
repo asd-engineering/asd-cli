@@ -1394,7 +1394,7 @@ Quick reference of most-used commands:
 | `asd init` | Initialize project workspace |
 | `asd run <task>` | Run automation task from asd.yaml |
 | `asd expose <port>` | Expose a port instantly |
-| `asd login` | Login for tunnels (coming soon) |
+| `asd login` | Login for tunnels (OAuth; `asd login key` for API-key / CI flow) |
 | `asd net` | Open network TUI |
 | `asd net apply` | Apply configuration |
 | `asd terminal` | Web terminal menu |
