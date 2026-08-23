@@ -171,7 +171,7 @@ This document tracks the maturity level of ASD CLI features, helping users under
 | Measure | Status | Notes |
 |---------|--------|-------|
 | AV pattern scanner | ✅ | 20+ patterns blocked in CI (LOLBins, shell spawning, process hiding) |
-| Windows Defender CI scan | ✅ | Compiled exe scanned in CI before merge |
+| Windows Defender CI scan | ✅ | Published exe scanned on every release before promotion to GitHub Release (`release.yml`); fast `av-pattern-scanner` static check still runs on every PR (`windows-ci.yml`) |
 | VERSIONINFO injection | ✅ | rcedit patches ProductName, CompanyName, etc. in release pipeline |
 | VirusTotal scanning | 🟢 | Automated scan of release binaries (optional, needs `VT_API_KEY`) |
 | Azure Trusted Signing | 🟡 | Infrastructure ready, degrades gracefully without secrets |

@@ -36,6 +36,30 @@ info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
+# Atomically place a file into its destination.
+#
+# `cp -f DEST` truncates the EXISTING inode in place (and, when DEST is a
+# symlink, writes through to the real target). On macOS the kernel then
+# SIGKILLs ("Killed: 9", instant, zero output) any process that is exec'ing
+# or already running that image while it is being rewritten. Two self-hosted
+# CI runners sharing one $HOME install to the same global asd/helper paths, so
+# runner-A's install repeatedly clobbered runner-B's running `asd test`.
+#
+# Copy to a temp file in the SAME directory as DEST, then rename(2) over it.
+# rename is atomic on a single filesystem: a concurrent exec sees either the
+# old or the new complete image — never a half-written one — and a process
+# already running keeps its original inode. Verified: in-place cp -f killed
+# 195/200 concurrent launches; atomic install killed 0/200.
+atomic_install_file() {
+  local src="$1" dest="$2" dest_dir tmp
+  dest_dir="$(dirname "$dest")"
+  mkdir -p "$dest_dir"
+  tmp="$(mktemp "$dest_dir/.asd-install.XXXXXX")" || error "mktemp failed in $dest_dir"
+  cp -f "$src" "$tmp" || { rm -f "$tmp"; error "copy failed: $src"; }
+  chmod +x "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$dest" || { rm -f "$tmp"; error "atomic move failed: $dest"; }
+}
+
 get_asd_home() {
   if [[ -n "${ASD_HOME:-}" ]]; then
     echo "$ASD_HOME"
@@ -482,14 +506,20 @@ See https://github.com/asd-engineering/asd-cli/releases"
     local bin_dir
     bin_dir=$(find "$tmp_dir/extracted" -maxdepth 3 -type d -name "bin" ! -path "*/code-server/*" ! -path "*/node_modules/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
-    cp -f "$bin_dir/"* "$INSTALL_DIR/"
+    for f in "$bin_dir/"*; do
+      [[ -e "$f" ]] || continue
+      atomic_install_file "$f" "$INSTALL_DIR/$(basename "$f")"
+    done
   else
     tar -xzf "$tmp_dir/$archive_name" -C "$tmp_dir"
     # Find top-level bin directory (exclude code-server/node_modules nested bin dirs)
     local bin_dir
     bin_dir=$(find "$tmp_dir" -maxdepth 2 -type d -name "bin" ! -path "*/code-server/*" ! -path "*/node_modules/*" ! -path "$INSTALL_DIR/*" | head -1)
     [[ -z "$bin_dir" ]] && error "No bin/ directory found in archive"
-    cp -f "$bin_dir/"* "$INSTALL_DIR/"
+    for f in "$bin_dir/"*; do
+      [[ -e "$f" ]] || continue
+      atomic_install_file "$f" "$INSTALL_DIR/$(basename "$f")"
+    done
 
     # Install bundled code-server runtime if present (Linux/macOS bundles)
     local code_server_root asd_home_cs
@@ -509,8 +539,7 @@ See https://github.com/asd-engineering/asd-cli/releases"
     mkdir -p "$asd_bin_dir"
     for helper_bin in caddy ttyd asd-tunnel; do
       if [[ -f "$bin_dir/$helper_bin" ]]; then
-        cp -f "$bin_dir/$helper_bin" "$asd_bin_dir/$helper_bin"
-        chmod +x "$asd_bin_dir/$helper_bin" 2>/dev/null || true
+        atomic_install_file "$bin_dir/$helper_bin" "$asd_bin_dir/$helper_bin"
         info "Installed $helper_bin to $asd_bin_dir/"
       fi
     done

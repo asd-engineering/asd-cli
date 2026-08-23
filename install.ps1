@@ -193,6 +193,26 @@ function Install-Asd {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
+    # Pre-install reap: stop any lingering asd-spawned processes that would
+    # lock the target binaries we're about to overwrite. PR #279 hit:
+    #   Copy-Item ... caddy.exe: The process cannot access the file because
+    #   it is being used by another process.
+    # The previous e2e run (or a leaked test) left caddy.exe (or asd/ttyd/
+    # asd-tunnel) holding the file. Win32 file handles block overwrite even
+    # with -Force. Reap them here so install is always idempotent — matches
+    # the orphan-reap pattern release.yml's e2e-windows uses post-test
+    # (release.yml:~1990, "Reap asd-spawned orphans"). Best-effort: no error
+    # if the process isn't there.
+    foreach ($lockedExe in @('asd', 'caddy', 'ttyd', 'asd-tunnel', 'busybox')) {
+        $procs = Get-Process -Name $lockedExe -ErrorAction SilentlyContinue
+        if ($procs) {
+            Write-Info "Reaping $($procs.Count) lingering $lockedExe process(es) holding install-dir files"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+    # Brief settle for the OS to release the file handles.
+    Start-Sleep -Milliseconds 250
+
     # Create temp directory
     $tmpDir = Join-Path $env:TEMP "asd-install-$(Get-Random)"
     New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
@@ -289,12 +309,15 @@ function Install-Asd {
             Write-Info "ASD CLI installed successfully!"
             Write-Info "   Location: $destBin"
 
-            try {
-                $installedVersion = & $destBin --version 2>$null
+            $installedVersion = & $destBin --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $installedVersion) {
                 Write-Info "   Version: $installedVersion"
-            } catch {
+            } else {
                 Write-Info "   Version: $resolvedVersion"
             }
+            # The version probe is informational; do not let a native exit code
+            # from older/broken --version handling fail an otherwise valid install.
+            $global:LASTEXITCODE = 0
 
             Write-Host ""
             Write-Info "To update in the future, run:"
