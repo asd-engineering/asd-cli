@@ -60,6 +60,30 @@ atomic_install_file() {
   mv -f "$tmp" "$dest" || { rm -f "$tmp"; error "atomic move failed: $dest"; }
 }
 
+# Resolve a path through any symlink chain. `readlink -f` is GNU-only in
+# practice (BSD readlink lacked -f until macOS 12.3), so fall back to
+# following links by hand, bounded so a symlink cycle can't hang the
+# installer.
+resolve_symlink() {
+  local p="${1:-}"
+  [[ -n "$p" ]] || { echo ""; return 0; }
+  local out
+  if out=$(readlink -f "$p" 2>/dev/null) && [[ -n "$out" ]]; then
+    echo "$out"
+    return 0
+  fi
+  local i=0 target
+  while [[ -L "$p" && $i -lt 32 ]]; do
+    target="$(readlink "$p")"
+    case "$target" in
+      /*) p="$target" ;;
+      *)  p="$(dirname "$p")/$target" ;;
+    esac
+    i=$((i + 1))
+  done
+  echo "$p"
+}
+
 get_asd_home() {
   if [[ -n "${ASD_HOME:-}" ]]; then
     echo "$ASD_HOME"
@@ -608,8 +632,31 @@ See https://github.com/asd-engineering/asd-cli/releases"
     echo "   asd update"
     echo ""
 
-    # Check if in PATH
-    if ! command -v asd &>/dev/null; then
+    # Check if in PATH.
+    #
+    # `command -v asd` succeeding is NOT proof the install is reachable: an
+    # older `asd` sitting in a directory that comes earlier in PATH (e.g.
+    # $PREFIX/bin on Termux, /usr/local/bin elsewhere) keeps resolving and
+    # the user silently keeps running the stale binary — including its
+    # broken `asd update`. Compare the RESOLVED target instead.
+    local on_path_asd resolved_installed resolved_on_path
+    on_path_asd="$(command -v asd 2>/dev/null || true)"
+    resolved_installed="$(resolve_symlink "$INSTALL_DIR/asd")"
+    resolved_on_path="$(resolve_symlink "$on_path_asd")"
+
+    if [[ -n "$on_path_asd" && "$resolved_on_path" != "$resolved_installed" ]]; then
+      warn "Another 'asd' shadows this install and will be used instead:"
+      echo ""
+      echo "    on PATH:   $on_path_asd -> $resolved_on_path"
+      echo "    installed: $INSTALL_DIR/asd -> $resolved_installed"
+      echo ""
+      warn "Point the shadowing entry at this install (recommended):"
+      echo ""
+      echo "  ln -sfn \"$resolved_installed\" \"$on_path_asd\""
+      echo ""
+      warn "...or remove it and put $INSTALL_DIR ahead of it in PATH."
+      echo ""
+    elif [[ -z "$on_path_asd" ]]; then
       # Detect shell RC file
       local shell_rc="$HOME/.bashrc"
       case "${SHELL:-}" in
