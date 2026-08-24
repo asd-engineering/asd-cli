@@ -10,9 +10,9 @@
 #                          Supports: file:///path/to/dir, http://..., or /absolute/path
 #
 # Examples:
-#   curl -fsSL https://asd.host/install.sh | bash                              # Latest
-#   curl -fsSL https://asd.host/install.sh | VERSION=v2.1.8-beta.1 bash        # Specific version
-#   curl -fsSL https://asd.host/install.sh | VERSION=list bash                 # List versions
+#   curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | bash                              # Latest
+#   curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | VERSION=v2.1.8-beta.1 bash        # Specific version
+#   curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | VERSION=list bash                 # List versions
 #
 # After installation, update with: asd update
 
@@ -161,7 +161,7 @@ list_versions() {
       done <<< "$tags"
       echo ""
       info "Install a specific version:"
-      echo "  curl -fsSL https://asd.host/install.sh | VERSION=${example_tag:-$tag} bash"
+      echo "  curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.sh | VERSION=${example_tag:-$tag} bash"
       echo ""
       return 0
     fi

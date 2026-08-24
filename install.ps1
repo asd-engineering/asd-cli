@@ -10,9 +10,9 @@
 #                          Supports: file:///path, C:\path, or http://...
 #
 # Examples:
-#   irm https://asd.host/install.ps1 | iex                                          # Latest
-#   $env:VERSION = "<tag>"; irm https://asd.host/install.ps1 | iex                   # Specific version
-#   $env:VERSION = "list"; irm https://asd.host/install.ps1 | iex                   # List versions
+#   irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex                                          # Latest
+#   $env:VERSION = "<tag>"; irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex                   # Specific version
+#   $env:VERSION = "list"; irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex                   # List versions
 #
 # After installation, update with: asd update
 #
@@ -135,7 +135,7 @@ function Show-AvailableVersions {
 
                 Write-Host ""
                 Write-Info "Install a specific version:"
-                Write-Host "  `$env:VERSION = '$exampleTag'; irm https://asd.host/install.ps1 | iex"
+                Write-Host "  `$env:VERSION = '$exampleTag'; irm https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.ps1 | iex"
                 Write-Host ""
                 return
             }

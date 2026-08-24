@@ -1,7 +1,7 @@
 @echo off
 :: ASD CLI Installer for Windows
 :: Delegates to PowerShell installer (bypass AMSI via saved file)
-:: Usage: curl -fsSL https://asd.host/install.cmd -o %TEMP%\install.cmd && %TEMP%\install.cmd
+:: Usage: curl -fsSL https://raw.githubusercontent.com/asd-engineering/asd-cli/main/install.cmd -o %TEMP%\install.cmd && %TEMP%\install.cmd
 
 echo [INFO] ASD CLI Installer (Windows)
 echo.
